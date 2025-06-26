@@ -265,6 +265,9 @@ function update(time, delta) {
             for (let j = 0; j < 3; j++) {
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
+            for (let j = 0; j < 5; j++) {
+                spawnEnemy.call(this, "GhostLunar.png");
+            }
             timerObj.timer = 0;
         }
     }
@@ -438,19 +441,20 @@ function update(time, delta) {
         }
         // --- Executioner special: instant base kill and phase 2 ---
         if (enemy.texture.key === "ExecutionerPlush.png") {
-            if (!enemy.phase2 && dist < (ballSize / 2 + enemy.displayHeight / 2 + 5)) {
-                // Phase 2: Summon 3 Cobalt Guards and 10 Knights at random edges
+            // Phase 2: Summon on half health (if not already done and not at base)
+            if (!enemy.phase2 && enemy.enemyHealth <= ENEMY_STATS["ExecutionerPlush.png"].health / 2 && !enemy.hasSummonedPhase2) {
                 for (let i = 0; i < 3; i++) {
                     spawnEnemyAtEdge.call(this, "CobaltGuardLunar.png");
                 }
                 for (let i = 0; i < 10; i++) {
                     spawnEnemyAtEdge.call(this, "KnightLunar.png");
                 }
-                enemy.phase2 = true;
-                // Play a dramatic effect (optional)
+                spawnEnemyAtEdge.call(this, "ReaperAct2_refreshed.png");
+                enemy.hasSummonedPhase2 = true;
                 this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
-            } else if (enemy.phase2 && dist < (ballSize / 2 + enemy.displayHeight / 2)) {
-                // If Executioner reaches the base after phase 2, instant game over
+            }
+            // If Executioner reaches the base, instant game over
+            if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
                 ballHealth = 0;
                 drawHealthBar();
                 gameOver.call(this);
