@@ -44,10 +44,10 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 150, damage: 1, firerate: 5, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 200, damage: 2, firerate: 1, cost: 150 },
-    "Scout.png":       { range: 100,  damage: 5, firerate: 3, cost: 40 },
-    "Shotgun.png":     { range: 75,  damage: 3, firerate: 6, cost:  50},
+    "Commander.png":   { range: 100, damage: 1, firerate: 5, cost: 100, isCommander: true },
+    "Minigunner.png":  { range: 150, damage: 1, firerate: 0.5, cost: 150 },
+    "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 40 },
+    "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  50},
 };
 
 const config = {
@@ -366,9 +366,9 @@ function update(time, delta) {
         }
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
-        let effectiveFirerate = (tower.firerate * firerateBuff) * 60; // convert to ms
-        effectiveFirerate = Math.max(effectiveFirerate, 80); // Clamp: minimum 80ms between shots
-        // Minigunner: continuous beam
+        let effectiveFirerate = (tower.firerate * firerateBuff) * 60;
+        effectiveFirerate = Math.max(effectiveFirerate, 120); // Clamp: minimum 120ms between shots
+        // Minigunner: continuous beam, damage at interval
         if (tower.towerType === "Minigunner.png") {
             // Find nearest enemy in range
             let target = null;
@@ -381,17 +381,21 @@ function update(time, delta) {
                 }
             });
             if (target) {
-                // Draw beam
                 minigunnerBeams.push({ x1: tower.x, y1: tower.y, x2: target.x, y2: target.y });
-                // Deal damage per frame: (damage / firerate) * (delta/60)
-                let dmgPerFrame = (tower.damage / tower.firerate) * ((delta || 16) / 60);
-                target.enemyHealth -= dmgPerFrame;
-                if (target.enemyHealth <= 0) {
-                    let cash = ENEMY_CASH[target.texture.key] || 0;
-                    target.destroy();
-                    playerMoney += cash;
-                    drawSidebar.call(this);
+                if (!tower.beamTimer) tower.beamTimer = 0;
+                tower.beamTimer += delta || 16;
+                if (tower.beamTimer >= effectiveFirerate) {
+                    target.enemyHealth -= tower.damage;
+                    if (target.enemyHealth <= 0) {
+                        let cash = ENEMY_CASH[target.texture.key] || 0;
+                        target.destroy();
+                        playerMoney += cash;
+                        drawSidebar.call(this);
+                    }
+                    tower.beamTimer = 0;
                 }
+            } else {
+                tower.beamTimer = 0;
             }
             return; // Skip bullet logic for minigunner
         }
@@ -408,7 +412,6 @@ function update(time, delta) {
                 }
             });
             if (target) {
-                // Count bullets spawned for shotgun
                 let before = bullets.length;
                 fireBullet.call(this, tower, target);
                 let after = bullets.length;
