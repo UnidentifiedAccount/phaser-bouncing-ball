@@ -192,7 +192,8 @@ function create() {
     sidebarGraphics = this.add.graphics();
     drawSidebar.call(this);
     TOWER_ASSETS.forEach((asset, i) => {
-        let iconY = 60 + i * 90;
+        // Adjust iconY to align icons with their stat descriptions
+        let iconY = 90 + i * 90; // Was 60 + i*90, now 90 for better alignment
         let icon = this.add.sprite(40, iconY, asset).setInteractive();
         icon.setDisplaySize(48, 48);
         icon.setDepth(10);
@@ -794,7 +795,7 @@ function drawSidebar() {
     this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
     TOWER_ASSETS.forEach((asset, i) => {
         let stats = TOWER_STATS[asset];
-        let y = 80 + i * 90;
+        let y = 90 + i * 90; // Match iconY for alignment
         this.add.text(70, y - 20, `R:${stats.range}`, { fontSize: '12px', fill: '#fff' });
         this.add.text(70, y - 5, `D:${stats.damage}`, { fontSize: '12px', fill: '#fff' });
         this.add.text(70, y + 10, `F:${stats.firerate}`, { fontSize: '12px', fill: '#fff' });
