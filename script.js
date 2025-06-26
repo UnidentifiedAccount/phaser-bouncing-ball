@@ -1,6 +1,23 @@
 let WIDTH = 600;
 let HEIGHT = 600;
 
+const ENEMY_ASSETS = [
+    "CitizenPlush.png",
+    "CobaltGuardLunar.png",
+    "ExecutionerPlush.png",
+    "GhostLunar.png",
+    "KnightLunar.png",
+    "LO_Marionette.png",
+    "ReaperAct2_refreshed.png",
+    "SinRealtdsnobackground.png"
+];
+const TOWER_ASSETS = [
+    "Commander.png",
+    "Minigunner.png",
+    "Scout.png",
+    "Shotgun.png"
+];
+
 const config = {
     type: Phaser.AUTO,
     width: WIDTH,
@@ -16,49 +33,130 @@ const game = new Phaser.Game(config);
 
 let ball;
 let ballSize = 80;
-let yspeed = 0.5;
-let xspeed = 1.0;
-let cursors;
-let wKey, aKey, sKey, dKey;
+let ballHealth = 20;
+let maxBallHealth = 20;
+let healthBar;
+let enemies;
+let enemySpeed = 1.2;
+let enemySpawnTimer = 0;
+let enemySpawnInterval = 80;
+let towers;
+let selectedTowerIndex = 0;
+let placingTower = false;
 
 function preload() {
-    this.load.image("ball", "assets/ball.png"); // watch out for case sensitivity
+    this.load.image("ball", "assets/ball.png");
+    ENEMY_ASSETS.forEach(asset => this.load.image(asset, `assets/${asset}`));
+    TOWER_ASSETS.forEach(asset => this.load.image(asset, `Towers/${asset}`));
 }
 
 function create() {
-    ball = this.add.sprite(WIDTH / 2, HEIGHT / 2, "ball"); // x, y, and the ball "key"
-    ball.setDisplaySize(ballSize, ballSize); // width, height
-    // Add WASD keys
-    wKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
-    aKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    sKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
-    dKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    // Ball (objective) in the center
+    ball = this.add.sprite(WIDTH / 2, HEIGHT / 2, "ball");
+    ball.setDisplaySize(ballSize, ballSize);
+    ball.setDepth(1);
+
+    // Health bar graphics
+    healthBar = this.add.graphics();
+    drawHealthBar();
+
+    // Enemy group
+    enemies = this.physics.add.group();
+
+    // Tower group
+    towers = this.add.group();
+
+    // Input for placing towers
+    this.input.on('pointerdown', pointer => {
+        if (placingTower) {
+            placeTower.call(this, pointer.x, pointer.y);
+        }
+    });
+
+    // Keyboard: 1-4 to select tower, T to toggle placement mode
+    this.input.keyboard.on('keydown', event => {
+        if (event.key >= '1' && event.key <= String(TOWER_ASSETS.length)) {
+            selectedTowerIndex = parseInt(event.key) - 1;
+        }
+        if (event.key.toLowerCase() === 't') {
+            placingTower = !placingTower;
+        }
+    });
 }
 
 function update() {
-    // Ball movement with WASD
-    let moveSpeed = 4;
-    if (wKey.isDown) {
-        ball.y -= moveSpeed;
-    }
-    if (sKey.isDown) {
-        ball.y += moveSpeed;
-    }
-    if (aKey.isDown) {
-        ball.x -= moveSpeed;
-    }
-    if (dKey.isDown) {
-        ball.x += moveSpeed;
+    // Spawn enemies at intervals
+    enemySpawnTimer++;
+    if (enemySpawnTimer >= enemySpawnInterval) {
+        spawnEnemy.call(this);
+        enemySpawnTimer = 0;
     }
 
-    // Keep bouncing logic
-    ball.y += yspeed;
-    ball.x += xspeed;
+    // Move enemies toward the ball
+    enemies.getChildren().forEach(enemy => {
+        let dx = ball.x - enemy.x;
+        let dy = ball.y - enemy.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 2) {
+            enemy.x += (dx / dist) * enemySpeed;
+            enemy.y += (dy / dist) * enemySpeed;
+        }
+        // Check collision with ball
+        if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
+            enemy.destroy();
+            ballHealth--;
+            drawHealthBar();
+            if (ballHealth <= 0) {
+                gameOver.call(this);
+            }
+        }
+    });
+}
 
-    if (ball.y >= HEIGHT - ballSize / 2 || ball.y <= ballSize / 2) {
-        yspeed *= -1;
-    }
-    if (ball.x >= WIDTH - ballSize / 2 || ball.x <= ballSize / 2) {
-        xspeed *= -1;
-    }
+function spawnEnemy() {
+    // Random edge
+    let edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+    let x, y;
+    if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
+    if (edge === 1) { x = WIDTH; y = Phaser.Math.Between(0, HEIGHT); }
+    if (edge === 2) { x = Phaser.Math.Between(0, WIDTH); y = HEIGHT; }
+    if (edge === 3) { x = 0; y = Phaser.Math.Between(0, HEIGHT); }
+    let asset = ENEMY_ASSETS[Phaser.Math.Between(0, ENEMY_ASSETS.length - 1)];
+    let enemy = enemies.create(x, y, asset);
+    enemy.setDisplaySize(48, 48);
+    enemy.setDepth(2);
+}
+
+function drawHealthBar() {
+    healthBar.clear();
+    let barWidth = 120;
+    let barHeight = 16;
+    let x = WIDTH / 2 - barWidth / 2;
+    let y = HEIGHT / 2 - ballSize / 2 - 30;
+    // Background
+    healthBar.fillStyle(0x222222, 1);
+    healthBar.fillRect(x, y, barWidth, barHeight);
+    // Health
+    let healthWidth = (ballHealth / maxBallHealth) * barWidth;
+    healthBar.fillStyle(0x00ff00, 1);
+    healthBar.fillRect(x, y, healthWidth, barHeight);
+    // Border
+    healthBar.lineStyle(2, 0xffffff, 1);
+    healthBar.strokeRect(x, y, barWidth, barHeight);
+}
+
+function placeTower(x, y) {
+    // Prevent placing on the ball
+    let dx = x - ball.x;
+    let dy = y - ball.y;
+    if (Math.sqrt(dx * dx + dy * dy) < ballSize) return;
+    let asset = TOWER_ASSETS[selectedTowerIndex];
+    let tower = this.add.sprite(x, y, asset);
+    tower.setDisplaySize(48, 48);
+    towers.add(tower);
+}
+
+function gameOver() {
+    this.add.text(WIDTH / 2 - 80, HEIGHT / 2, "Game Over!", { fontSize: '32px', fill: '#ff0000' });
+    this.scene.pause();
 }
