@@ -32,22 +32,35 @@ const ENEMY_STATS = {
 
 // Cash rewards per enemy type
 const ENEMY_CASH = {
-    "CitizenPlush.png": 25,
-    "CobaltGuardLunar.png": 90,
-    "ExecutionerPlush.png": 400,
-    "GhostLunar.png": 40,
-    "KnightLunar.png": 60,
-    "LO_Marionette.png": 75,
-    "ReaperAct2_refreshed.png": 100,
-    "SinRealtdsnobackground.png": 0
+    "CitizenPlush.png": 15,
+    "CobaltGuardLunar.png": 60,
+    "ExecutionerPlush.png": 300,
+    "GhostLunar.png": 25,
+    "KnightLunar.png": 40,
+    "LO_Marionette.png": 50,
+    "ReaperAct2_refreshed.png": 65,
+    "SinRealtdsnobackground.png": 5
 };
 
 // Tower stats
 const TOWER_STATS = {
     "Commander.png":   { range: 100, damage: 1, firerate: 5, cost: 100, isCommander: true },
     "Minigunner.png":  { range: 150, damage: 1, firerate: 0.5, cost: 150 },
-    "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 40 },
-    "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  50},
+    "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 20 },
+    "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  40},
+};
+
+// --- HP MODIFIER CONFIG ---
+const ENEMY_HP_MODIFIER = {
+    // key: firstWaveAppeared
+    "CitizenPlush.png": 0,
+    "GhostLunar.png": 0,
+    "KnightLunar.png": 1,
+    "CobaltGuardLunar.png": 2,
+    "LO_Marionette.png": 4,
+    "ReaperAct2_refreshed.png": 3,
+    "ExecutionerPlush.png": 4,
+    "SinRealtdsnobackground.png": 3
 };
 
 const config = {
@@ -126,6 +139,9 @@ let executionerKillTimer = 0;
 
 // --- GLOBAL REAPER ID COUNTER ---
 if (typeof window.REAPER_ID_COUNTER === 'undefined') window.REAPER_ID_COUNTER = 1;
+
+let hpModifierIcon = null;
+let hpModifierTooltip = null;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -206,6 +222,22 @@ function create() {
         }
     });
     bulletGraphics = this.add.graphics();
+    // --- HP Modifier Indicator ---
+    // Remove previous indicator if it exists
+    if (hpModifierIcon && hpModifierIcon.destroy) hpModifierIcon.destroy();
+    if (hpModifierTooltip && hpModifierTooltip.destroy) hpModifierTooltip.destroy();
+    hpModifierIcon = this.add.rectangle(10, HEIGHT - 30, 28, 28, 0x8844ff, 0.8).setOrigin(0, 0).setInteractive();
+    let hpText = this.add.text(16, HEIGHT - 26, 'HP+', { fontSize: '16px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0, 0);
+    hpModifierIcon.on('pointerover', () => {
+        if (hpModifierTooltip && hpModifierTooltip.destroy) hpModifierTooltip.destroy();
+        hpModifierTooltip = this.add.text(45, HEIGHT - 38, 'Enemy HP increases by 10% per wave after first appearance.', {
+            fontSize: '14px', fill: '#fff', backgroundColor: '#222', padding: { left: 6, right: 6, top: 2, bottom: 2 }
+        }).setDepth(200).setOrigin(0, 0);
+    });
+    hpModifierIcon.on('pointerout', () => {
+        if (hpModifierTooltip && hpModifierTooltip.destroy) hpModifierTooltip.destroy();
+        hpModifierTooltip = null;
+    });
 }
 
 let waveTransitionTimer = 0;
@@ -461,6 +493,17 @@ function update(time, delta) {
                 spawnEnemyAtEdge.call(this, "ReaperAct2_refreshed.png");
                 enemy.hasSummonedPhase2 = true;
                 enemy.phase2 = true;
+                // --- PHASE 2 BUFF: Move to edge, heal, increase speed ---
+                let edge = Phaser.Math.Between(0, 3);
+                let newX, newY;
+                if (edge === 0) { newX = Phaser.Math.Between(0, WIDTH); newY = 0; }
+                if (edge === 1) { newX = WIDTH; newY = Phaser.Math.Between(0, HEIGHT); }
+                if (edge === 2) { newX = Phaser.Math.Between(0, WIDTH); newY = HEIGHT; }
+                if (edge === 3) { newX = 0; newY = Phaser.Math.Between(0, HEIGHT); }
+                enemy.x = newX;
+                enemy.y = newY;
+                enemy.enemyHealth = 200;
+                enemy.enemySpeed = 0.6;
                 // Track phase2 indicator for this executioner
                 if (enemy.phase2Text && enemy.phase2Text.destroy) enemy.phase2Text.destroy();
                 enemy.phase2Text = this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
@@ -574,8 +617,12 @@ function spawnEnemy(type) {
     let enemy = this.add.sprite(x, y, type);
     enemy.setDisplaySize(48, 48);
     enemy.setDepth(2);
+    // --- Apply HP modifier ---
+    let firstWave = ENEMY_HP_MODIFIER[type] ?? 0;
+    let bonusWaves = typeof currentWave === 'number' ? Math.max(0, currentWave - firstWave) : 0;
+    let bonusHp = Math.ceil(stats.health * 0.1 * bonusWaves);
     enemy.enemySpeed = stats.speed;
-    enemy.enemyHealth = stats.health;
+    enemy.enemyHealth = stats.health + bonusHp;
     // Assign unique id for reaper kill timer
     if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
     enemies.add(enemy);
@@ -619,15 +666,21 @@ function drawHealthBar() {
     healthBar.strokeRect(x, y, barWidth, barHeight);
 }
 
+let waveTextObj = null;
+let moneyTextObj = null;
+
 function drawSidebar() {
     sidebarGraphics.clear();
     sidebarGraphics.fillStyle(0x222244, 1);
     sidebarGraphics.fillRect(0, 0, 100, HEIGHT);
+    // Remove previous text objects if they exist
+    if (waveTextObj && waveTextObj.destroy) { waveTextObj.destroy(); waveTextObj = null; }
+    if (moneyTextObj && moneyTextObj.destroy) { moneyTextObj.destroy(); moneyTextObj = null; }
     // Wave indicator
     let waveText = `Wave: ${Math.min(currentWave + 1, WAVES.length)}/${WAVES.length}`;
-    this.add.text(10, 10, waveText, { fontSize: '16px', fill: '#fff' });
+    waveTextObj = this.add.text(10, 10, waveText, { fontSize: '16px', fill: '#fff' });
     // Cash indicator
-    this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
+    moneyTextObj = this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
     this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
     TOWER_ASSETS.forEach((asset, i) => {
         let stats = TOWER_STATS[asset];
