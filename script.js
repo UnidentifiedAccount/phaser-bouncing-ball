@@ -352,6 +352,7 @@ function update(time, delta) {
     // --- Tower Firing Logic ---
     let bulletsSpawnedThisFrame = 0;
     const BULLET_SPAWN_LIMIT_PER_FRAME = 1000;
+    let minigunnerBeams = [];
     towers.getChildren().forEach(tower => {
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
@@ -367,6 +368,34 @@ function update(time, delta) {
         tower.lastShot += delta || 16;
         let effectiveFirerate = (tower.firerate * firerateBuff) * 60; // convert to ms
         effectiveFirerate = Math.max(effectiveFirerate, 80); // Clamp: minimum 80ms between shots
+        // Minigunner: continuous beam
+        if (tower.towerType === "Minigunner.png") {
+            // Find nearest enemy in range
+            let target = null;
+            let minDist = Infinity;
+            enemies.getChildren().forEach(enemy => {
+                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
+                if (d < tower.range && d < minDist) {
+                    minDist = d;
+                    target = enemy;
+                }
+            });
+            if (target) {
+                // Draw beam
+                minigunnerBeams.push({ x1: tower.x, y1: tower.y, x2: target.x, y2: target.y });
+                // Deal damage per frame: (damage / firerate) * (delta/60)
+                let dmgPerFrame = (tower.damage / tower.firerate) * ((delta || 16) / 60);
+                target.enemyHealth -= dmgPerFrame;
+                if (target.enemyHealth <= 0) {
+                    let cash = ENEMY_CASH[target.texture.key] || 0;
+                    target.destroy();
+                    playerMoney += cash;
+                    drawSidebar.call(this);
+                }
+            }
+            return; // Skip bullet logic for minigunner
+        }
+        // --- Normal bullet logic for other towers ---
         if (tower.lastShot >= effectiveFirerate && bulletsSpawnedThisFrame < BULLET_SPAWN_LIMIT_PER_FRAME) {
             // Find nearest enemy in range
             let target = null;
@@ -390,6 +419,14 @@ function update(time, delta) {
     });
     // --- Bullet Logic ---
     bulletGraphics.clear();
+    // Draw minigunner beams
+    minigunnerBeams.forEach(beam => {
+        bulletGraphics.lineStyle(3, 0xffff00, 0.7);
+        bulletGraphics.beginPath();
+        bulletGraphics.moveTo(beam.x1, beam.y1);
+        bulletGraphics.lineTo(beam.x2, beam.y2);
+        bulletGraphics.strokePath();
+    });
     for (let i = bullets.length - 1; i >= 0; i--) {
         let bullet = bullets[i];
         bullet.x += bullet.vx;
