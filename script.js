@@ -119,10 +119,13 @@ let currentWave = 0;
 let waveQueue = [];
 let waveInProgress = false;
 let waveTimer = 0;
-let reaperSummonTimers = [];
+let reaperSummonTimers = {}; // { [reaperId]: { timer: number, reaper: Phaser.Sprite } }
 let stunnedTowers = [];
 let executionerStunTimer = 0;
 let executionerKillTimer = 0;
+
+// --- GLOBAL REAPER ID COUNTER ---
+if (typeof window.REAPER_ID_COUNTER === 'undefined') window.REAPER_ID_COUNTER = 1;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -205,38 +208,32 @@ function create() {
     bulletGraphics = this.add.graphics();
 }
 
-function startWave(waveNum) {
-    if (waveNum >= WAVES.length) return;
-    waveQueue = [];
-    reaperSummonTimers = [];
-    WAVES[waveNum].forEach(entry => {
-        for (let i = 0; i < entry.count; i++) {
-            waveQueue.push(entry.type);
-        }
-    });
-    Phaser.Utils.Array.Shuffle(waveQueue);
-    waveInProgress = true;
-    waveTimer = 0;
-    // Show fun message for final wave
-    if (waveNum === WAVES.length - 1) {
-        if (this.finalWaveText) this.finalWaveText.destroy();
-        this.finalWaveText = this.add.text(WIDTH / 2, 40, 'YOU SHALL DIE HERETIC!!!', {
-            fontSize: '32px',
-            fill: '#ff0000',
-            fontStyle: 'bold',
-            fontFamily: 'Arial',
-            align: 'center'
-        }).setOrigin(0.5, 0).setDepth(100);
-    } else if (this.finalWaveText) {
-        this.finalWaveText.destroy();
-        this.finalWaveText = null;
-    }
-}
+let waveTransitionTimer = 0;
+let waveTransitionActive = false;
+let waveCompleteText = null;
+let punishmentText = null;
+let specialLongTransition = false;
 
 function update(time, delta) {
     // --- Wave Spawning ---
-    if (!waveInProgress && currentWave < WAVES.length) {
-        startWave(currentWave);
+    if (!waveInProgress && currentWave < WAVES.length && !waveTransitionActive) {
+        startWave.call(this, currentWave);
+    }
+    // Handle wave transition delay
+    if (waveTransitionActive) {
+        waveTransitionTimer += delta || 16;
+        let transitionDuration = specialLongTransition ? 10000 : 2000;
+        if (waveTransitionTimer > transitionDuration) {
+            waveTransitionActive = false;
+            waveTransitionTimer = 0;
+            specialLongTransition = false;
+            if (waveCompleteText && waveCompleteText.destroy) waveCompleteText.destroy();
+            if (punishmentText && punishmentText.destroy) punishmentText.destroy();
+            if (currentWave < WAVES.length) {
+                startWave.call(this, currentWave);
+            }
+        }
+        return;
     }
     if (waveInProgress && waveQueue.length > 0) {
         waveTimer += delta || 16;
@@ -259,16 +256,10 @@ function update(time, delta) {
     for (let i = reaperSummonTimers.length - 1; i >= 0; i--) {
         let timerObj = reaperSummonTimers[i];
         timerObj.timer += delta || 16;
-        // Find if reaper is still alive
-        let reaperAlive = false;
-        enemies.getChildren().forEach(enemy => {
-            if (enemy.texture.key === "ReaperAct2_refreshed.png") {
-                reaperAlive = true;
-            }
-        });
-        timerObj.reaperAlive = reaperAlive;
-        if (!reaperAlive) {
-            reaperSummonTimers.splice(i, 1);
+        // Find if the specific reaper for this timer is still alive
+        let reaper = enemies.getChildren().find(enemy => enemy.texture.key === "ReaperAct2_refreshed.png" && enemy.id === timerObj.reaperId && enemy.active);
+        if (!reaper) {
+            reaperSummonTimers.splice(i, 1); // Remove timer if reaper is dead
             continue;
         }
         if (timerObj.timer > 2000) { // 1 per 2 seconds
@@ -323,25 +314,37 @@ function update(time, delta) {
             });
         }
     });
-    // --- Reaper Kill Mechanic (kill all towers on contact, refund 75% of cost) ---
+    // --- Reaper Kill Mechanic (kill 1 tower every 5 seconds, refund 75% of cost) ---
+    if (!this.reaperKillTimers) this.reaperKillTimers = {};
+    let sidebarNeedsUpdate = false;
     enemies.getChildren().forEach(enemy => {
+        if (!enemy.active) return;
         if (enemy.texture.key === "ReaperAct2_refreshed.png") {
-            towers.getChildren().forEach(tower => {
-                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
-                if (d < 30) {
-                    towers.getChildren().forEach(t => {
-                        if (t.towerCost) {
-                            playerMoney += Math.floor(t.towerCost * 0.75);
-                        }
-                        t.destroy();
-                    });
-                    drawSidebar.call(this);
+            if (!this.reaperKillTimers[enemy.id]) this.reaperKillTimers[enemy.id] = 0;
+            this.reaperKillTimers[enemy.id] += delta || 16;
+            if (this.reaperKillTimers[enemy.id] >= 5000) {
+                let towersArr = towers.getChildren().filter(t => t.active);
+                if (towersArr.length > 0) {
+                    Phaser.Utils.Array.Shuffle(towersArr);
+                    let tower = towersArr[0];
+                    if (tower.towerCost) {
+                        playerMoney += Math.floor(tower.towerCost * 0.75);
+                    }
+                    tower.destroy();
+                    sidebarNeedsUpdate = true;
                 }
-            });
+                this.reaperKillTimers[enemy.id] = 0;
+            }
         }
+    });
+    // Clean up timers for dead reapers
+    Object.keys(this.reaperKillTimers).forEach(id => {
+        let stillExists = enemies.getChildren().some(e => e.active && e.texture.key === "ReaperAct2_refreshed.png" && e.id == id);
+        if (!stillExists) delete this.reaperKillTimers[id];
     });
     // --- Stun Timer Update ---
     towers.getChildren().forEach(tower => {
+        if (!tower.active) return;
         if (tower.stunned) {
             tower.stunTime -= delta || 16;
             if (tower.stunTime <= 0) {
@@ -352,8 +355,8 @@ function update(time, delta) {
     // --- Tower Firing Logic ---
     let bulletsSpawnedThisFrame = 0;
     const BULLET_SPAWN_LIMIT_PER_FRAME = 1000;
-    let minigunnerBeams = [];
     towers.getChildren().forEach(tower => {
+        if (!tower.active) return; // Skip destroyed towers
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
         if (!tower.isCommander) {
@@ -368,38 +371,7 @@ function update(time, delta) {
         tower.lastShot += delta || 16;
         let effectiveFirerate = (tower.firerate * firerateBuff) * 60;
         effectiveFirerate = Math.max(effectiveFirerate, 120); // Clamp: minimum 120ms between shots
-        // Minigunner: continuous beam, damage at interval
-        if (tower.towerType === "Minigunner.png") {
-            // Find nearest enemy in range
-            let target = null;
-            let minDist = Infinity;
-            enemies.getChildren().forEach(enemy => {
-                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
-                if (d < tower.range && d < minDist) {
-                    minDist = d;
-                    target = enemy;
-                }
-            });
-            if (target) {
-                minigunnerBeams.push({ x1: tower.x, y1: tower.y, x2: target.x, y2: target.y });
-                if (!tower.beamTimer) tower.beamTimer = 0;
-                tower.beamTimer += delta || 16;
-                if (tower.beamTimer >= effectiveFirerate) {
-                    target.enemyHealth -= tower.damage;
-                    if (target.enemyHealth <= 0) {
-                        let cash = ENEMY_CASH[target.texture.key] || 0;
-                        target.destroy();
-                        playerMoney += cash;
-                        drawSidebar.call(this);
-                    }
-                    tower.beamTimer = 0;
-                }
-            } else {
-                tower.beamTimer = 0;
-            }
-            return; // Skip bullet logic for minigunner
-        }
-        // --- Normal bullet logic for other towers ---
+        // All towers (including Minigunner) use bullet logic
         if (tower.lastShot >= effectiveFirerate && bulletsSpawnedThisFrame < BULLET_SPAWN_LIMIT_PER_FRAME) {
             // Find nearest enemy in range
             let target = null;
@@ -422,14 +394,6 @@ function update(time, delta) {
     });
     // --- Bullet Logic ---
     bulletGraphics.clear();
-    // Draw minigunner beams
-    minigunnerBeams.forEach(beam => {
-        bulletGraphics.lineStyle(3, 0xffff00, 0.7);
-        bulletGraphics.beginPath();
-        bulletGraphics.moveTo(beam.x1, beam.y1);
-        bulletGraphics.lineTo(beam.x2, beam.y2);
-        bulletGraphics.strokePath();
-    });
     for (let i = bullets.length - 1; i >= 0; i--) {
         let bullet = bullets[i];
         bullet.x += bullet.vx;
@@ -442,6 +406,7 @@ function update(time, delta) {
             continue;
         }
         enemies.getChildren().forEach(enemy => {
+            if (!enemy.active) return;
             let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
             if (d < 24) {
                 if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
@@ -453,11 +418,13 @@ function update(time, delta) {
                     let cash = ENEMY_CASH[enemy.texture.key] || 0;
                     enemy.destroy();
                     playerMoney += cash;
-                    drawSidebar.call(this);
+                    sidebarNeedsUpdate = true;
                 }
             }
         });
     }
+    // Only update sidebar once per frame if needed
+    if (sidebarNeedsUpdate) drawSidebar.call(this);
     // --- Move enemies toward the ball (fix: use correct reference for ball position) ---
     enemies.getChildren().forEach(enemy => {
         if (!ball || !enemy) return;
@@ -487,7 +454,66 @@ function update(time, delta) {
         if (currentWave >= WAVES.length) {
             this.add.text(WIDTH / 2 - 120, HEIGHT / 2 - 40, "Victory! All Waves Complete!", { fontSize: '32px', fill: '#0f0' });
             this.scene.pause();
+        } else {
+            // Special long transition before final wave
+            if (currentWave === WAVES.length) {
+                // Should not happen, handled above
+            } else if (currentWave === WAVES.length - 1) {
+                // After wave 4, before wave 5
+                if (waveCompleteText && waveCompleteText.destroy) waveCompleteText.destroy();
+                waveCompleteText = this.add.text(WIDTH / 2, HEIGHT / 2 - 40, `Wave ${currentWave} Complete!`, {
+                    fontSize: '32px', fill: '#fff', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
+                }).setOrigin(0.5, 0.5).setDepth(100);
+                punishmentText = this.add.text(WIDTH / 2, HEIGHT / 2 + 10, 'YOU WILL FACE YOUR PUNISHMENT HERETIC', {
+                    fontSize: '28px', fill: '#ff2222', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
+                }).setOrigin(0.5, 0.5).setDepth(101);
+                waveTransitionActive = true;
+                waveTransitionTimer = 0;
+                specialLongTransition = true;
+            } else {
+                // Normal transition
+                if (waveCompleteText && waveCompleteText.destroy) waveCompleteText.destroy();
+                waveCompleteText = this.add.text(WIDTH / 2, HEIGHT / 2 - 40, `Wave ${currentWave} Complete!`, {
+                    fontSize: '32px', fill: '#fff', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
+                }).setOrigin(0.5, 0.5).setDepth(100);
+                waveTransitionActive = true;
+                waveTransitionTimer = 0;
+                specialLongTransition = false;
+            }
         }
+    }
+}
+
+function startWave(waveNum) {
+    if (waveNum >= WAVES.length) return;
+    waveQueue = [];
+    reaperSummonTimers = {};
+    WAVES[waveNum].forEach(entry => {
+        for (let i = 0; i < entry.count; i++) {
+            waveQueue.push(entry.type);
+        }
+    });
+    Phaser.Utils.Array.Shuffle(waveQueue);
+    waveInProgress = true;
+    waveTimer = 0;
+    // Remove wave complete text if present
+    if (typeof waveCompleteText !== 'undefined' && waveCompleteText && waveCompleteText.destroy) {
+        waveCompleteText.destroy();
+        waveCompleteText = null;
+    }
+    // Show fun message for final wave
+    if (waveNum === WAVES.length - 1) {
+        if (this.finalWaveText && this.finalWaveText.destroy) this.finalWaveText.destroy();
+        this.finalWaveText = this.add.text(WIDTH / 2, 40, 'YOU SHALL DIE HERETIC!!!', {
+            fontSize: '32px',
+            fill: '#ff0000',
+            fontStyle: 'bold',
+            fontFamily: 'Arial',
+            align: 'center'
+        }).setOrigin(0.5, 0).setDepth(100);
+    } else if (this.finalWaveText && this.finalWaveText.destroy) {
+        this.finalWaveText.destroy();
+        this.finalWaveText = null;
     }
 }
 
@@ -509,6 +535,8 @@ function spawnEnemy(type) {
     enemy.setDepth(2);
     enemy.enemySpeed = stats.speed;
     enemy.enemyHealth = stats.health;
+    // Assign unique id for reaper kill timer
+    if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
     enemies.add(enemy);
 }
 
@@ -569,6 +597,7 @@ function placeTower(x, y, asset) {
     tower.isCommander = !!stats.isCommander;
     tower.lastShot = 0;
     tower.towerCost = stats.cost; // Track cost for refund
+    if (asset === "Minigunner.png") tower.beamTimer = 0; // Always initialize beamTimer
     towers.add(tower);
     playerMoney -= stats.cost;
     drawSidebar.call(this);
