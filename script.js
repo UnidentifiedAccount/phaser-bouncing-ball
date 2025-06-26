@@ -240,12 +240,10 @@ function update(time, delta) {
         if (waveTimer > 800) {
             let type = waveQueue.shift();
             if (type === "ReaperAct2_refreshed.png") {
-                spawnEnemy.call(this, type);
-                reaperSummonTimers.push({
-                    reaperAlive: true,
-                    timer: 0,
-                    reaperId: Date.now() + Math.random()
-                });
+                let reaper = spawnEnemy.call(this, type);
+                if (reaper && reaper.id !== undefined) {
+                    reaperSummonTimers[reaper.id] = { timer: 0 };
+                }
             } else if (type !== "SinRealtdsnobackground.png") {
                 spawnEnemy.call(this, type);
             }
@@ -253,13 +251,14 @@ function update(time, delta) {
         }
     }
     // --- Reaper Summoning SinRealtdsnobackground.png (nerfed to 1 per 2 seconds) ---
-    for (let i = reaperSummonTimers.length - 1; i >= 0; i--) {
-        let timerObj = reaperSummonTimers[i];
+    for (const reaperId in reaperSummonTimers) {
+        if (!reaperSummonTimers.hasOwnProperty(reaperId)) continue;
+        let timerObj = reaperSummonTimers[reaperId];
         timerObj.timer += delta || 16;
         // Find if the specific reaper for this timer is still alive
-        let reaper = enemies.getChildren().find(enemy => enemy.texture.key === "ReaperAct2_refreshed.png" && enemy.id === timerObj.reaperId && enemy.active);
+        let reaper = enemies.getChildren().find(enemy => enemy.texture.key === "ReaperAct2_refreshed.png" && enemy.id == reaperId && enemy.active);
         if (!reaper) {
-            reaperSummonTimers.splice(i, 1); // Remove timer if reaper is dead
+            delete reaperSummonTimers[reaperId]; // Remove timer if reaper is dead
             continue;
         }
         if (timerObj.timer > 2000) { // 1 per 2 seconds
@@ -538,6 +537,7 @@ function spawnEnemy(type) {
     // Assign unique id for reaper kill timer
     if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
     enemies.add(enemy);
+    return enemy;
 }
 
 function drawHealthBar() {
