@@ -45,7 +45,7 @@ const ENEMY_CASH = {
 // Tower stats
 const TOWER_STATS = {
     "Commander.png":   { range: 100, damage: 4, firerate: 8, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 150, damage: 1.5, firerate: 0.5, cost: 150 },
+    "Minigunner.png":  { range: 150, damage: 2, firerate: 0.5, cost: 150 },
     "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 20 },
     "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  40},
 };
@@ -145,11 +145,6 @@ if (typeof window.REAPER_ID_COUNTER === 'undefined') window.REAPER_ID_COUNTER = 
 
 let hpModifierIcon = null;
 let hpModifierTooltip = null;
-
-// --- GLOBAL for Executioner healthbar ---
-let execHealthBar = null;
-let execHealthBarText = null;
-let execTracked = null;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -604,35 +599,37 @@ function update(time, delta) {
         }
     }
 
-    // --- Executioner Healthbar UI ---
-    if (execTracked && execTracked.active) {
-        // Update healthbar position and value
-        if (!execHealthBar) {
-            execHealthBar = this.add.graphics();
-        } else {
-            execHealthBar.clear();
+    // --- Executioner healthbar below him ---
+    enemies.getChildren().forEach(enemy => {
+        if (enemy.texture && enemy.texture.key === "ExecutionerPlush.png" && enemy.active) {
+            if (!enemy.execHealthBar) {
+                enemy.execHealthBar = this.add.graphics();
+                enemy.execHealthBarText = this.add.text(enemy.x, enemy.y + 38, 'Executioner', { fontSize: '10px', fill: '#ff0000', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5, 0);
+            }
+            // Update healthbar position and value
+            let barWidth = 48;
+            let barHeight = 6;
+            let x = enemy.x - barWidth / 2;
+            let y = enemy.y + 24;
+            let maxHp = enemy.phase2 ? 200 : ENEMY_STATS["ExecutionerPlush.png"].health;
+            let healthRatio = Math.max(0, enemy.enemyHealth / maxHp);
+            enemy.execHealthBar.clear();
+            enemy.execHealthBar.fillStyle(0x222222, 1);
+            enemy.execHealthBar.fillRect(x, y, barWidth, barHeight);
+            enemy.execHealthBar.fillStyle(0xff0000, 1);
+            enemy.execHealthBar.fillRect(x, y, barWidth * healthRatio, barHeight);
+            enemy.execHealthBar.lineStyle(1, 0xffffff, 1);
+            enemy.execHealthBar.strokeRect(x, y, barWidth, barHeight);
+            enemy.execHealthBar.setDepth(100);
+            enemy.execHealthBarText.setPosition(enemy.x, y + barHeight + 1);
+            enemy.execHealthBarText.setDepth(101);
+        } else if (enemy.execHealthBar) {
+            enemy.execHealthBar.clear();
+            enemy.execHealthBar.destroy();
+            enemy.execHealthBar = null;
+            if (enemy.execHealthBarText) { enemy.execHealthBarText.destroy(); enemy.execHealthBarText = null; }
         }
-        if (!execHealthBarText) {
-            execHealthBarText = this.add.text(WIDTH / 2, 10, 'EXECUTIONER', { fontSize: '20px', fill: '#ff0000', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5, 0);
-        }
-        let barWidth = 300;
-        let barHeight = 18;
-        let x = WIDTH / 2 - barWidth / 2;
-        let y = 40;
-        let healthRatio = Math.max(0, execTracked.enemyHealth / (execTracked.phase2 ? 200 : ENEMY_STATS["ExecutionerPlush.png"].health));
-        execHealthBar.fillStyle(0x222222, 1);
-        execHealthBar.fillRect(x, y, barWidth, barHeight);
-        execHealthBar.fillStyle(0xff0000, 1);
-        execHealthBar.fillRect(x, y, barWidth * healthRatio, barHeight);
-        execHealthBar.lineStyle(2, 0xffffff, 1);
-        execHealthBar.strokeRect(x, y, barWidth, barHeight);
-        execHealthBar.setDepth(200);
-        execHealthBarText.setDepth(201);
-    } else {
-        if (execHealthBar) { execHealthBar.clear(); execHealthBar.destroy(); execHealthBar = null; }
-        if (execHealthBarText) { execHealthBarText.destroy(); execHealthBarText = null; }
-        execTracked = null;
-    }
+    });
 }
 
 function startWave(waveNum) {
