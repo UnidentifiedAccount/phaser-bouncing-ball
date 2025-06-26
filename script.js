@@ -44,8 +44,8 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 100, damage: 1, firerate: 5, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 150, damage: 1, firerate: 0.5, cost: 150 },
+    "Commander.png":   { range: 100, damage: 4, firerate: 8, cost: 100, isCommander: true },
+    "Minigunner.png":  { range: 150, damage: 1.5, firerate: 0.5, cost: 150 },
     "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 20 },
     "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  40},
 };
@@ -62,6 +62,9 @@ const ENEMY_HP_MODIFIER = {
     "ExecutionerPlush.png": 4,
     "SinRealtdsnobackground.png": 3
 };
+
+// --- WAVE REWARD CONFIG ---
+const WAVE_REWARDS = [50, 100, 200, 400];
 
 const config = {
     type: Phaser.AUTO,
@@ -143,6 +146,11 @@ if (typeof window.REAPER_ID_COUNTER === 'undefined') window.REAPER_ID_COUNTER = 
 let hpModifierIcon = null;
 let hpModifierTooltip = null;
 
+// --- GLOBAL for Executioner healthbar ---
+let execHealthBar = null;
+let execHealthBarText = null;
+let execTracked = null;
+
 function preload() {
     this.load.image("ball", "assets/ball.png");
     ENEMY_ASSETS.forEach(asset => this.load.image(asset, `assets/${asset}`));
@@ -152,7 +160,7 @@ function preload() {
 function create() {
     // Ball (objective) in the center
     ball = this.add.sprite(WIDTH / 2, HEIGHT / 2, "ball");
-    ball.setDisplaySize(ballSize, ballSize);
+    ball.setDisplaySize(ballSize * 0.5, ballSize * 0.5); // Shrink base to 50%
     ball.setDepth(1);
 
     // Health bar graphics
@@ -388,14 +396,18 @@ function update(time, delta) {
         let stillExists = enemies.getChildren().some(e => e.active && e.texture.key === "ReaperAct2_refreshed.png" && e.id == id);
         if (!stillExists) delete this.reaperKillTimers[id];
     });
-    // --- Stun Timer Update ---
+    // --- Stun Timer Update & Visual Indicator ---
     towers.getChildren().forEach(tower => {
         if (!tower.active) return;
         if (tower.stunned) {
             tower.stunTime -= delta || 16;
+            tower.setAlpha(0.4); // Translucent when stunned
             if (tower.stunTime <= 0) {
                 tower.stunned = false;
+                tower.setAlpha(1);
             }
+        } else {
+            tower.setAlpha(1);
         }
     });
     // --- Tower Firing Logic ---
@@ -459,6 +471,10 @@ function update(time, delta) {
                 if (!bullet.piercing) bullets.splice(i, 1);
                 if (enemy.enemyHealth <= 0) {
                     let cash = ENEMY_CASH[enemy.texture.key] || 0;
+                    // --- Wave 5 death counter for Executioner spawn ---
+                    if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
+                        window.wave5DeathCounter++;
+                    }
                     enemy.destroy();
                     playerMoney += cash;
                     sidebarNeedsUpdate = true;
@@ -534,7 +550,16 @@ function update(time, delta) {
     // --- End of wave check ---
     if (waveInProgress && waveQueue.length === 0 && enemies.getLength() === 0) {
         waveInProgress = false;
+        // --- Give wave reward ---
+        if (currentWave < WAVE_REWARDS.length) {
+            playerMoney += WAVE_REWARDS[currentWave];
+            drawSidebar.call(this);
+        }
         currentWave++;
+        // Clean up wave 5 death counter variables
+        window.wave5DeathCounter = undefined;
+        window.wave5ExecToSpawn = undefined;
+        window.wave5ExecSpawned = undefined;
         if (currentWave >= WAVES.length) {
             this.add.text(WIDTH / 2 - 120, HEIGHT / 2 - 40, "Victory! All Waves Complete!", { fontSize: '32px', fill: '#0f0' });
             this.scene.pause();
@@ -566,18 +591,77 @@ function update(time, delta) {
             }
         }
     }
+
+    // --- Executioner spawn logic for wave 5 ---
+    if (currentWave === 4 && typeof window.wave5DeathCounter === 'number' && window.wave5ExecToSpawn > 0 && window.wave5ExecSpawned < window.wave5ExecToSpawn) {
+        if (window.wave5DeathCounter >= 20) {
+            // Spawn Executioner(s) at edge
+            for (let i = 0; i < window.wave5ExecToSpawn; i++) {
+                spawnEnemyAtEdge.call(this, "ExecutionerPlush.png");
+                window.wave5ExecSpawned++;
+            }
+            window.wave5ExecToSpawn = 0; // Prevent further spawns
+        }
+    }
+
+    // --- Executioner Healthbar UI ---
+    if (execTracked && execTracked.active) {
+        // Update healthbar position and value
+        if (!execHealthBar) {
+            execHealthBar = this.add.graphics();
+        } else {
+            execHealthBar.clear();
+        }
+        if (!execHealthBarText) {
+            execHealthBarText = this.add.text(WIDTH / 2, 10, 'EXECUTIONER', { fontSize: '20px', fill: '#ff0000', fontStyle: 'bold', fontFamily: 'Arial' }).setOrigin(0.5, 0);
+        }
+        let barWidth = 300;
+        let barHeight = 18;
+        let x = WIDTH / 2 - barWidth / 2;
+        let y = 40;
+        let healthRatio = Math.max(0, execTracked.enemyHealth / (execTracked.phase2 ? 200 : ENEMY_STATS["ExecutionerPlush.png"].health));
+        execHealthBar.fillStyle(0x222222, 1);
+        execHealthBar.fillRect(x, y, barWidth, barHeight);
+        execHealthBar.fillStyle(0xff0000, 1);
+        execHealthBar.fillRect(x, y, barWidth * healthRatio, barHeight);
+        execHealthBar.lineStyle(2, 0xffffff, 1);
+        execHealthBar.strokeRect(x, y, barWidth, barHeight);
+        execHealthBar.setDepth(200);
+        execHealthBarText.setDepth(201);
+    } else {
+        if (execHealthBar) { execHealthBar.clear(); execHealthBar.destroy(); execHealthBar = null; }
+        if (execHealthBarText) { execHealthBarText.destroy(); execHealthBarText = null; }
+        execTracked = null;
+    }
 }
 
 function startWave(waveNum) {
     if (waveNum >= WAVES.length) return;
     waveQueue = [];
     reaperSummonTimers = {};
-    WAVES[waveNum].forEach(entry => {
-        for (let i = 0; i < entry.count; i++) {
-            waveQueue.push(entry.type);
-        }
-    });
-    Phaser.Utils.Array.Shuffle(waveQueue);
+    // --- Custom spawn order for Executioner in wave 5 ---
+    if (waveNum === 4) { // Wave 5 (index 4)
+        let entries = [];
+        let execCount = 0;
+        WAVES[waveNum].forEach(entry => {
+            for (let i = 0; i < entry.count; i++) {
+                if (entry.type === "ExecutionerPlush.png") execCount++;
+                else entries.push(entry.type);
+            }
+        });
+        // Set up death counter for Executioner spawn
+        window.wave5DeathCounter = 0;
+        window.wave5ExecToSpawn = execCount;
+        window.wave5ExecSpawned = 0;
+        waveQueue = entries;
+    } else {
+        WAVES[waveNum].forEach(entry => {
+            for (let i = 0; i < entry.count; i++) {
+                waveQueue.push(entry.type);
+            }
+        });
+        Phaser.Utils.Array.Shuffle(waveQueue);
+    }
     waveInProgress = true;
     waveTimer = 0;
     // Remove wave complete text if present
@@ -625,6 +709,10 @@ function spawnEnemy(type) {
     enemy.enemyHealth = stats.health + bonusHp;
     // Assign unique id for reaper kill timer
     if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
+    // --- Executioner phase 2 cash bonus ---
+    if (type === "ExecutionerPlush.png" && enemy.phase2CashGiven !== true) {
+        enemy.phase2CashGiven = false;
+    }
     enemies.add(enemy);
     return enemy;
 }
@@ -650,10 +738,10 @@ function spawnEnemyAtEdge(type) {
 
 function drawHealthBar() {
     healthBar.clear();
-    let barWidth = 120;
-    let barHeight = 16;
+    let barWidth = 60; // 50% of previous 120
+    let barHeight = 8; // 50% of previous 16
     let x = WIDTH / 2 - barWidth / 2;
-    let y = HEIGHT / 2 - ballSize / 2 - 30;
+    let y = HEIGHT / 2 - (ballSize * 0.5) / 2 - 15; // Adjust for smaller base
     // Background
     healthBar.fillStyle(0x222222, 1);
     healthBar.fillRect(x, y, barWidth, barHeight);
