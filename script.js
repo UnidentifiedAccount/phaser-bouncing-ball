@@ -25,7 +25,7 @@ const ENEMY_STATS = {
     "ExecutionerPlush.png":{ speed: 0.3, health: 300 },
     "GhostLunar.png":      { speed: 1.2, health: 5 },
     "KnightLunar.png":     { speed: 2, health: 10 },
-    "LO_Marionette.png":   { speed: 1.5, health: 25},
+    "LO_Marionette.png":   { speed: 1.5, health: 20},
     "ReaperAct2_refreshed.png": { speed: 0.5, health: 60 },
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
 };
