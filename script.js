@@ -32,10 +32,10 @@ const ENEMY_STATS = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 120, damage: 1, firerate: 40, cost: 20, isCommander: true },
-    "Minigunner.png":  { range: 100, damage: 1, firerate: 10, cost: 30 },
-    "Scout.png":       { range: 80,  damage: 2, firerate: 30, cost: 15 },
-    "Shotgun.png":     { range: 60,  damage: 4, firerate: 50, cost: 25 }
+    "Commander.png":   { range: 120, damage: 1, firerate: 5, cost: 30, isCommander: true },
+    "Minigunner.png":  { range: 100, damage: 1, firerate: 0.1, cost: 40 },
+    "Scout.png":       { range: 80,  damage: 2, firerate: 3, cost: 10 },
+    "Shotgun.png":     { range: 60,  damage: 4, firerate: 5, cost: 20 }
 };
 
 const config = {
