@@ -44,7 +44,7 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 100, damage: 4, firerate: 10, cost: 100, isCommander: true },
+    "Commander.png":   { range: 250, damage: 4, firerate: 10, cost: 100, isCommander: true },
     "Minigunner.png":  { range: 150, damage: 2, firerate: 0.5, cost: 150 },
     "Scout.png":       { range: 85,  damage: 5, firerate: 8, cost: 20 },
     "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  40},
@@ -423,9 +423,9 @@ function update(time, delta) {
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
         if (!tower.isCommander) {
-            // Commander buff: 2.5x faster (firerate * 0.4), not stackable
+            // Commander buff: halve interval between shots (2x firerate), not stackable
             let inRangeOfCommander = towers.getChildren().some(other => other.isCommander && Math.sqrt((tower.x - other.x) ** 2 + (tower.y - other.y) ** 2) < other.range);
-            if (inRangeOfCommander) firerateBuff *= 0.266; // 3.75x faster (1.5x as fast as previous 2.5x)
+            if (inRangeOfCommander) firerateBuff *= 0.5; // 2x faster
         }
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
