@@ -217,6 +217,20 @@ function startWave(waveNum) {
     Phaser.Utils.Array.Shuffle(waveQueue);
     waveInProgress = true;
     waveTimer = 0;
+    // Show fun message for final wave
+    if (waveNum === WAVES.length - 1) {
+        if (this.finalWaveText) this.finalWaveText.destroy();
+        this.finalWaveText = this.add.text(WIDTH / 2, 40, 'YOU SHALL DIE HERETIC!!!', {
+            fontSize: '32px',
+            fill: '#ff0000',
+            fontStyle: 'bold',
+            fontFamily: 'Arial',
+            align: 'center'
+        }).setOrigin(0.5, 0).setDepth(100);
+    } else if (this.finalWaveText) {
+        this.finalWaveText.destroy();
+        this.finalWaveText = null;
+    }
 }
 
 function update(time, delta) {
@@ -274,6 +288,25 @@ function update(time, delta) {
             let toKill = allTowers.slice(0, 3);
             toKill.forEach(tower => {
                 tower.destroy();
+            });
+            // Show "DIE!" above each executioner
+            executioners.forEach(exec => {
+                if (!exec.dieText || !exec.dieText.active) {
+                    exec.dieText = this.add.text(exec.x, exec.y - 40, 'DIE!', {
+                        fontSize: '24px',
+                        fill: '#ff0000',
+                        fontStyle: 'bold',
+                        fontFamily: 'Arial',
+                        align: 'center'
+                    }).setOrigin(0.5, 1).setDepth(100);
+                    this.tweens.add({
+                        targets: exec.dieText,
+                        y: exec.y - 70,
+                        alpha: 0,
+                        duration: 900,
+                        onComplete: () => { exec.dieText.destroy(); }
+                    });
+                }
             });
         }
         executionerKillTimer = 0;
