@@ -45,7 +45,7 @@ const ENEMY_CASH = {
 // Tower stats
 const TOWER_STATS = {
     "Commander.png":   { range: 150, damage: 1, firerate: 5, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 200, damage: 1, firerate: 0.5, cost: 150 },
+    "Minigunner.png":  { range: 200, damage: 2, firerate: 1, cost: 150 },
     "Scout.png":       { range: 100,  damage: 5, firerate: 3, cost: 40 },
     "Shotgun.png":     { range: 75,  damage: 3, firerate: 6, cost:  50},
 };
@@ -350,6 +350,8 @@ function update(time, delta) {
         }
     });
     // --- Tower Firing Logic ---
+    let bulletsSpawnedThisFrame = 0;
+    const BULLET_SPAWN_LIMIT_PER_FRAME = 100;
     towers.getChildren().forEach(tower => {
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
@@ -364,8 +366,8 @@ function update(time, delta) {
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
         let effectiveFirerate = (tower.firerate * firerateBuff) * 60; // convert to ms
-        effectiveFirerate = Math.max(effectiveFirerate, 30); // Clamp: minimum 30ms between shots
-        if (tower.lastShot >= effectiveFirerate) {
+        effectiveFirerate = Math.max(effectiveFirerate, 80); // Clamp: minimum 80ms between shots
+        if (tower.lastShot >= effectiveFirerate && bulletsSpawnedThisFrame < BULLET_SPAWN_LIMIT_PER_FRAME) {
             // Find nearest enemy in range
             let target = null;
             let minDist = Infinity;
@@ -377,7 +379,11 @@ function update(time, delta) {
                 }
             });
             if (target) {
+                // Count bullets spawned for shotgun
+                let before = bullets.length;
                 fireBullet.call(this, tower, target);
+                let after = bullets.length;
+                bulletsSpawnedThisFrame += (after - before);
                 tower.lastShot = 0;
             }
         }
