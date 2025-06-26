@@ -18,6 +18,18 @@ const TOWER_ASSETS = [
     "Shotgun.png"
 ];
 
+// Assign stats for each enemy asset
+const ENEMY_STATS = {
+    "CitizenPlush.png":    { speed: 1.0, health: 2 },
+    "CobaltGuardLunar.png":{ speed: 1.5, health: 1 },
+    "ExecutionerPlush.png":{ speed: 0.8, health: 4 },
+    "GhostLunar.png":      { speed: 1.8, health: 1 },
+    "KnightLunar.png":     { speed: 1.2, health: 3 },
+    "LO_Marionette.png":   { speed: 1.1, health: 2 },
+    "ReaperAct2_refreshed.png": { speed: 1.3, health: 2 },
+    "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
+};
+
 const config = {
     type: Phaser.AUTO,
     width: WIDTH,
@@ -98,8 +110,8 @@ function update() {
         let dy = ball.y - enemy.y;
         let dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > 2) {
-            enemy.x += (dx / dist) * enemySpeed;
-            enemy.y += (dy / dist) * enemySpeed;
+            enemy.x += (dx / dist) * enemy.enemySpeed;
+            enemy.y += (dy / dist) * enemy.enemySpeed;
         }
         // Check collision with ball
         if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
@@ -114,7 +126,7 @@ function update() {
 }
 
 function spawnEnemy() {
-    // Random edge
+    // Random edge and random position along that edge
     let edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
     let x, y;
     if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
@@ -122,9 +134,12 @@ function spawnEnemy() {
     if (edge === 2) { x = Phaser.Math.Between(0, WIDTH); y = HEIGHT; }
     if (edge === 3) { x = 0; y = Phaser.Math.Between(0, HEIGHT); }
     let asset = ENEMY_ASSETS[Phaser.Math.Between(0, ENEMY_ASSETS.length - 1)];
+    let stats = ENEMY_STATS[asset];
     let enemy = enemies.create(x, y, asset);
     enemy.setDisplaySize(48, 48);
     enemy.setDepth(2);
+    enemy.enemySpeed = stats.speed;
+    enemy.enemyHealth = stats.health;
 }
 
 function drawHealthBar() {
