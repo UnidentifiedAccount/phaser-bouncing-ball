@@ -22,7 +22,7 @@ const TOWER_ASSETS = [
 const ENEMY_STATS = {
     "CitizenPlush.png":    { speed: 1.0, health: 3 },
     "CobaltGuardLunar.png":{ speed: 0.8, health: 30 },
-    "ExecutionerPlush.png":{ speed: 0.3, health: 250 },
+    "ExecutionerPlush.png":{ speed: 0.3, health: 300 },
     "GhostLunar.png":      { speed: 1.2, health: 4 },
     "KnightLunar.png":     { speed: 2, health: 6 },
     "LO_Marionette.png":   { speed: 1.5, health: 15},
@@ -268,14 +268,14 @@ function update(time, delta) {
             timerObj.timer = 0;
         }
     }
-    // --- Executioner Kill Mechanic (buffed) ---
+    // --- Executioner Kill Mechanic (nerfed) ---
     executionerKillTimer += delta || 16;
-    if (executionerKillTimer > 2000) {
+    if (executionerKillTimer > 3000) { // Now every 3 seconds
         let executioners = enemies.getChildren().filter(e => e.texture.key === "ExecutionerPlush.png");
         if (executioners.length > 0) {
-            let allTowers = towers.getChildren();
+            let allTowers = towers.getChildren().filter(t => t.active);
             Phaser.Utils.Array.Shuffle(allTowers);
-            let toKill = allTowers.slice(0, 3);
+            let toKill = allTowers.slice(0, 2); // Now kills 2 towers
             toKill.forEach(tower => {
                 tower.destroy();
             });
@@ -436,8 +436,28 @@ function update(time, delta) {
             enemy.x += moveX;
             enemy.y += moveY;
         }
-        // Check collision with ball
-        if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
+        // --- Executioner special: instant base kill and phase 2 ---
+        if (enemy.texture.key === "ExecutionerPlush.png") {
+            if (!enemy.phase2 && dist < (ballSize / 2 + enemy.displayHeight / 2 + 5)) {
+                // Phase 2: Summon 3 Cobalt Guards and 10 Knights at random edges
+                for (let i = 0; i < 3; i++) {
+                    spawnEnemyAtEdge.call(this, "CobaltGuardLunar.png");
+                }
+                for (let i = 0; i < 10; i++) {
+                    spawnEnemyAtEdge.call(this, "KnightLunar.png");
+                }
+                enemy.phase2 = true;
+                // Play a dramatic effect (optional)
+                this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
+            } else if (enemy.phase2 && dist < (ballSize / 2 + enemy.displayHeight / 2)) {
+                // If Executioner reaches the base after phase 2, instant game over
+                ballHealth = 0;
+                drawHealthBar();
+                gameOver.call(this);
+                enemy.destroy();
+            }
+        } else if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
+            // Normal enemy collision with base
             enemy.destroy();
             ballHealth--;
             drawHealthBar();
@@ -535,6 +555,25 @@ function spawnEnemy(type) {
     enemy.enemySpeed = stats.speed;
     enemy.enemyHealth = stats.health;
     // Assign unique id for reaper kill timer
+    if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
+    enemies.add(enemy);
+    return enemy;
+}
+
+// Helper to spawn enemy at random edge
+function spawnEnemyAtEdge(type) {
+    let edge = Phaser.Math.Between(0, 3);
+    let x, y;
+    if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
+    if (edge === 1) { x = WIDTH; y = Phaser.Math.Between(0, HEIGHT); }
+    if (edge === 2) { x = Phaser.Math.Between(0, WIDTH); y = HEIGHT; }
+    if (edge === 3) { x = 0; y = Phaser.Math.Between(0, HEIGHT); }
+    let stats = ENEMY_STATS[type];
+    let enemy = this.add.sprite(x, y, type);
+    enemy.setDisplaySize(48, 48);
+    enemy.setDepth(2);
+    enemy.enemySpeed = stats.speed;
+    enemy.enemyHealth = stats.health;
     if (type === "ReaperAct2_refreshed.png") enemy.id = window.REAPER_ID_COUNTER++;
     enemies.add(enemy);
     return enemy;
