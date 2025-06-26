@@ -394,6 +394,16 @@ function update(time, delta) {
     // --- Stun Timer Update & Visual Indicator ---
     towers.getChildren().forEach(tower => {
         if (!tower.active) return;
+        // Highlight yellow if buffed by commander (but not commander himself)
+        if (!tower.isCommander) {
+            let inRangeOfCommander = towers.getChildren().some(other => other.isCommander && Math.sqrt((tower.x - other.x) ** 2 + (tower.y - other.y) ** 2) < other.range);
+            if (inRangeOfCommander) {
+                tower.setTint(0xffff00); // yellow
+            } else if (!tower.stunned) {
+                tower.clearTint();
+            }
+        }
+        // Stun logic
         if (tower.stunned) {
             tower.stunTime -= delta || 16;
             tower.setAlpha(0.4); // Translucent when stunned
@@ -515,9 +525,10 @@ function update(time, delta) {
                 enemy.y = newY;
                 enemy.enemyHealth = 200;
                 enemy.enemySpeed = 0.6;
-                // Track phase2 indicator for this executioner
-                if (enemy.phase2Text && enemy.phase2Text.destroy) enemy.phase2Text.destroy();
-                enemy.phase2Text = this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
+                // Remove phase2 indicator if it exists
+                if (enemy.phase2Text && enemy.phase2Text.destroy) { enemy.phase2Text.destroy(); enemy.phase2Text = null; }
+                // Make Executioner glow red in phase 2
+                enemy.setTint(0xff2222);
             }
             // Remove phase2 indicator if executioner dies
             if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.phase2Text && enemy.phase2Text.destroy) {
@@ -533,6 +544,10 @@ function update(time, delta) {
             if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.execHealthBarText) {
                 enemy.execHealthBarText.destroy();
                 enemy.execHealthBarText = null;
+            }
+            // Remove red glow if executioner dies
+            if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.clearTint) {
+                enemy.clearTint();
             }
             // If Executioner reaches the base, instant game over
             if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
@@ -566,7 +581,7 @@ function update(time, delta) {
         window.wave5ExecToSpawn = undefined;
         window.wave5ExecSpawned = undefined;
         if (currentWave >= WAVES.length) {
-            this.add.text(WIDTH / 2 - 120, HEIGHT / 2 - 40, "Victory! All Waves Complete!", { fontSize: '32px', fill: '#0f0' });
+            this.add.text(WIDTH / 2 - 80, HEIGHT / 2, "Victory!", { fontSize: '32px', fill: '#0f0' });
             this.scene.pause();
         } else {
             // Special long transition before final wave
