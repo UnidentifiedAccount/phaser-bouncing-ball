@@ -22,26 +22,27 @@ const TOWER_ASSETS = [
 const ENEMY_STATS = {
     "CitizenPlush.png":    { speed: 1.0, health: 3 },
     "CobaltGuardLunar.png":{ speed: 0.8, health: 10 },
-    "ExecutionerPlush.png":{ speed: 0.5, health: 30 },
+    "ExecutionerPlush.png":{ speed: 0.5, health: 300 },
     "GhostLunar.png":      { speed: 1.8, health: 2 },
     "KnightLunar.png":     { speed: 1.1, health: 5 },
-    "LO_Marionette.png":   { speed: 1.3, health: 1 },
-    "ReaperAct2_refreshed.png": { speed: 0.8, health: 15 },
+    "LO_Marionette.png":   { speed: 1.3, health: 10 },
+    "ReaperAct2_refreshed.png": { speed: 0.8, health: 50 },
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
 };
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 120, damage: 1, firerate: 5, cost: 30, isCommander: true },
-    "Minigunner.png":  { range: 100, damage: 1, firerate: 0.1, cost: 40 },
-    "Scout.png":       { range: 80,  damage: 2, firerate: 3, cost: 10 },
-    "Shotgun.png":     { range: 60,  damage: 4, firerate: 5, cost: 20 }
+    "Commander.png":   { range: 120, damage: 1, firerate: 5, cost: 75, isCommander: true },
+    "Minigunner.png":  { range: 100, damage: 1, firerate: 0.1, cost: 200 },
+    "Scout.png":       { range: 80,  damage: 2, firerate: 3, cost: 30 },
+    "Shotgun.png":     { range: 60,  damage: 4, firerate: 5, cost: 50 }
 };
 
 const config = {
     type: Phaser.AUTO,
     width: WIDTH,
     height: HEIGHT,
+    parent: 'game-container', // Ensure Phaser renders into the correct div
     scene: {
         preload: preload,
         create: create,
@@ -69,9 +70,47 @@ let sidebarGraphics;
 let playerMoney = 100;
 // --- Tower Defense Game Core Logic ---
 // Add bullet group
-let bullets;
+let bullets = [];
 // Add a render layer for bullets
 let bulletGraphics;
+
+// --- Wave Structure ---
+const WAVES = [
+    [ // Wave 1
+        { type: "CitizenPlush.png", count: 5 },
+        { type: "GhostLunar.png", count: 4 }
+    ],
+    [ // Wave 2
+        { type: "CitizenPlush.png", count: 7 },
+        { type: "GhostLunar.png", count: 5 },
+        { type: "KnightLunar.png", count: 3 }
+    ],
+    [ // Wave 3
+        { type: "KnightLunar.png", count: 8 },
+        { type: "CobaltGuardLunar.png", count: 2 }
+    ],
+    [ // Wave 4
+        { type: "CobaltGuardLunar.png", count: 4 },
+        { type: "ReaperAct2_refreshed.png", count: 2 }
+    ],
+    [ // Wave 5 (Final)
+        { type: "CitizenPlush.png", count: 20 },
+        { type: "CobaltGuardLunar.png", count: 5 },
+        { type: "ExecutionerPlush.png", count: 1 },
+        { type: "ReaperAct2_refreshed.png", count: 3 },
+        { type: "GhostLunar.png", count: 10 },
+        { type: "KnightLunar.png", count: 15 },
+        { type: "LO_Marionette.png", count: 5 }
+    ]
+];
+let currentWave = 0;
+let waveQueue = [];
+let waveInProgress = false;
+let waveTimer = 0;
+let reaperSummonTimers = [];
+let stunnedTowers = [];
+let executionerStunTimer = 0;
+let executionerKillTimer = 0;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -89,13 +128,15 @@ function create() {
     healthBar = this.add.graphics();
     drawHealthBar();
 
-    // Enemy group
-    enemies = this.physics.add.group();
+    // Enemy group (use this.add.group, not this.physics.add.group for static sprites)
+    enemies = this.add.group();
 
-    // Tower group
+    // Tower group (use this.add.group for static sprites)
     towers = this.add.group();
-    // Bullet group
-    bullets = this.physics.add.group();
+
+    // Bullet group (no physics needed for visuals)
+    bullets = [];
+
     // Input for placing towers
     this.input.on('pointerdown', pointer => {
         if (placingTower) {
@@ -116,7 +157,6 @@ function create() {
     // Sidebar for towers
     sidebarGraphics = this.add.graphics();
     drawSidebar.call(this);
-    // Sidebar tower icons (for drag and drop)
     TOWER_ASSETS.forEach((asset, i) => {
         let iconY = 60 + i * 90;
         let icon = this.add.sprite(40, iconY, asset).setInteractive();
@@ -134,7 +174,6 @@ function create() {
         icon.on('pointerover', () => { icon.setAlpha(0.8); });
         icon.on('pointerout', () => { icon.setAlpha(1); });
     });
-    // Drag and drop logic
     this.input.on('pointermove', pointer => {
         if (draggingTowerSprite) {
             draggingTowerSprite.x = pointer.x;
@@ -154,35 +193,114 @@ function create() {
     bulletGraphics = this.add.graphics();
 }
 
-function update(time, delta) {
-    // Spawn enemies at intervals
-    enemySpawnTimer++;
-    if (enemySpawnTimer >= enemySpawnInterval) {
-        spawnEnemy.call(this);
-        enemySpawnTimer = 0;
-    }
-    // Move enemies toward the ball
-    enemies.getChildren().forEach(enemy => {
-        let dx = ball.x - enemy.x;
-        let dy = ball.y - enemy.y;
-        let dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 2) {
-            enemy.x += (dx / dist) * enemy.enemySpeed;
-            enemy.y += (dy / dist) * enemy.enemySpeed;
+function startWave(waveNum) {
+    if (waveNum >= WAVES.length) return;
+    waveQueue = [];
+    reaperSummonTimers = [];
+    WAVES[waveNum].forEach(entry => {
+        for (let i = 0; i < entry.count; i++) {
+            waveQueue.push(entry.type);
         }
-        // Check collision with ball
-        if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
-            enemy.destroy();
-            ballHealth--;
-            drawHealthBar();
-            if (ballHealth <= 0) {
-                gameOver.call(this);
+    });
+    Phaser.Utils.Array.Shuffle(waveQueue);
+    waveInProgress = true;
+    waveTimer = 0;
+}
+
+function update(time, delta) {
+    // --- Wave Spawning ---
+    if (!waveInProgress && currentWave < WAVES.length) {
+        startWave(currentWave);
+    }
+    if (waveInProgress && waveQueue.length > 0) {
+        waveTimer += delta || 16;
+        if (waveTimer > 800) {
+            let type = waveQueue.shift();
+            if (type === "ReaperAct2_refreshed.png") {
+                spawnEnemy.call(this, type);
+                reaperSummonTimers.push({
+                    reaperAlive: true,
+                    timer: 0,
+                    reaperId: Date.now() + Math.random()
+                });
+            } else if (type !== "SinRealtdsnobackground.png") {
+                spawnEnemy.call(this, type);
+            }
+            waveTimer = 0;
+        }
+    }
+    // --- Reaper Summoning SinRealtdsnobackground.png (buffed to 1 per second) ---
+    for (let i = reaperSummonTimers.length - 1; i >= 0; i--) {
+        let timerObj = reaperSummonTimers[i];
+        timerObj.timer += delta || 16;
+        // Find if reaper is still alive
+        let reaperAlive = false;
+        enemies.getChildren().forEach(enemy => {
+            if (enemy.texture.key === "ReaperAct2_refreshed.png") {
+                reaperAlive = true;
+            }
+        });
+        timerObj.reaperAlive = reaperAlive;
+        if (!reaperAlive) {
+            reaperSummonTimers.splice(i, 1);
+            continue;
+        }
+        if (timerObj.timer > 1000) { // 1 per second
+            for (let j = 0; j < 3; j++) {
+                spawnEnemy.call(this, "SinRealtdsnobackground.png");
+            }
+            timerObj.timer = 0;
+        }
+    }
+    // --- Executioner Kill Mechanic (buffed) ---
+    executionerKillTimer += delta || 16;
+    if (executionerKillTimer > 2000) {
+        let executioners = enemies.getChildren().filter(e => e.texture.key === "ExecutionerPlush.png");
+        if (executioners.length > 0) {
+            let allTowers = towers.getChildren();
+            Phaser.Utils.Array.Shuffle(allTowers);
+            let toKill = allTowers.slice(0, 3);
+            toKill.forEach(tower => {
+                tower.destroy();
+            });
+        }
+        executionerKillTimer = 0;
+    }
+    // --- Knight Stun Mechanic (on contact) ---
+    enemies.getChildren().forEach(enemy => {
+        if (enemy.texture.key === "KnightLunar.png") {
+            towers.getChildren().forEach(tower => {
+                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
+                if (d < 30 && !tower.stunned) {
+                    tower.stunned = true;
+                    tower.stunTime = 3000;
+                }
+            });
+        }
+    });
+    // --- Reaper Kill Mechanic (kill all towers on contact) ---
+    enemies.getChildren().forEach(enemy => {
+        if (enemy.texture.key === "ReaperAct2_refreshed.png") {
+            towers.getChildren().forEach(tower => {
+                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
+                if (d < 30) {
+                    towers.getChildren().forEach(t => t.destroy());
+                }
+            });
+        }
+    });
+    // --- Stun Timer Update ---
+    towers.getChildren().forEach(tower => {
+        if (tower.stunned) {
+            tower.stunTime -= delta || 16;
+            if (tower.stunTime <= 0) {
+                tower.stunned = false;
             }
         }
     });
     // --- Tower Firing Logic ---
     towers.getChildren().forEach(tower => {
-        // Commander passive: reduce firerate of other towers in range
+        if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
         if (!tower.isCommander) {
             towers.getChildren().forEach(other => {
@@ -193,8 +311,8 @@ function update(time, delta) {
             });
         }
         if (!tower.lastShot) tower.lastShot = 0;
-        tower.lastShot += delta;
-        let effectiveFirerate = tower.firerate * firerateBuff;
+        tower.lastShot += delta || 16;
+        let effectiveFirerate = (tower.firerate * firerateBuff) * 60; // convert to ms
         if (tower.lastShot >= effectiveFirerate) {
             // Find nearest enemy in range
             let target = null;
@@ -214,47 +332,60 @@ function update(time, delta) {
     });
     // --- Bullet Logic ---
     bulletGraphics.clear();
-    bullets.getChildren().forEach(bullet => {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        let bullet = bullets[i];
         bullet.x += bullet.vx;
         bullet.y += bullet.vy;
         bullet.lifetime--;
-        // Remove bullet if out of lifetime or out of bounds
+        bulletGraphics.fillStyle(0xffff00, 1);
+        bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
         if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
-            bullet.destroy();
-        } else {
-            // Check collision with enemies
-            enemies.getChildren().forEach(enemy => {
-                let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
-                if (d < 24) {
-                    enemy.enemyHealth -= bullet.damage;
-                    bullet.destroy();
-                    if (enemy.enemyHealth <= 0) {
-                        enemy.destroy();
-                        playerMoney += 2;
-                        drawSidebar.call(this);
-                    }
-                }
-            });
+            bullets.splice(i, 1);
+            continue;
         }
-    });
-    renderBullets(bulletGraphics);
+        enemies.getChildren().forEach(enemy => {
+            let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+            if (d < 24) {
+                enemy.enemyHealth -= bullet.damage;
+                bullets.splice(i, 1);
+                if (enemy.enemyHealth <= 0) {
+                    enemy.destroy();
+                    playerMoney += 10;
+                    drawSidebar.call(this);
+                }
+            }
+        });
+    }
+    // --- End of wave check ---
+    if (waveInProgress && waveQueue.length === 0 && enemies.getLength() === 0) {
+        waveInProgress = false;
+        currentWave++;
+        if (currentWave >= WAVES.length) {
+            this.add.text(WIDTH / 2 - 120, HEIGHT / 2 - 40, "Victory! All Waves Complete!", { fontSize: '32px', fill: '#0f0' });
+            this.scene.pause();
+        }
+    }
 }
 
-function spawnEnemy() {
-    // Random edge and random position along that edge
-    let edge = Phaser.Math.Between(0, 3); // 0=top, 1=right, 2=bottom, 3=left
+function spawnEnemy(type) {
+    // If no type provided, pick random (for legacy calls)
+    if (!type) {
+        let filtered = ENEMY_ASSETS.filter(e => e !== "SinRealtdsnobackground.png");
+        type = filtered[Phaser.Math.Between(0, filtered.length - 1)];
+    }
+    let edge = Phaser.Math.Between(0, 3);
     let x, y;
     if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
     if (edge === 1) { x = WIDTH; y = Phaser.Math.Between(0, HEIGHT); }
     if (edge === 2) { x = Phaser.Math.Between(0, WIDTH); y = HEIGHT; }
     if (edge === 3) { x = 0; y = Phaser.Math.Between(0, HEIGHT); }
-    let asset = ENEMY_ASSETS[Phaser.Math.Between(0, ENEMY_ASSETS.length - 1)];
-    let stats = ENEMY_STATS[asset];
-    let enemy = enemies.create(x, y, asset);
+    let stats = ENEMY_STATS[type];
+    let enemy = this.add.sprite(x, y, type);
     enemy.setDisplaySize(48, 48);
     enemy.setDepth(2);
     enemy.enemySpeed = stats.speed;
     enemy.enemyHealth = stats.health;
+    enemies.add(enemy);
 }
 
 function drawHealthBar() {
@@ -318,17 +449,15 @@ function fireBullet(tower, target) {
     let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
     let speed = 6;
     // Use a graphics object for bullet visuals
-    let bullet = bullets.create(tower.x, tower.y, null);
-    bullet.setData('isBullet', true);
-    bullet.vx = Math.cos(angle) * speed;
-    bullet.vy = Math.sin(angle) * speed;
-    bullet.lifetime = 60;
-    bullet.damage = tower.damage;
-    // Use a circle for bullet visuals
-    bullet.displayWidth = 8;
-    bullet.displayHeight = 8;
-    bullet.setVisible(false); // Hide default sprite
-    // Draw bullet manually in update
+    let bullet = {
+        x: tower.x,
+        y: tower.y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        lifetime: 60,
+        damage: tower.damage
+    };
+    bullets.push(bullet);
 }
 
 // Draw bullets manually

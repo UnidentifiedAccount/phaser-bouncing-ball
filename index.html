@@ -2,25 +2,40 @@
 <html>
 
 <head>
-    <title>Phaser Game</title>
+    <title>Phaser Tower Defense</title>
     <script src="phaser.min.js"></script>
-    <script src="script.js"></script>
     <style>
         body {
             margin: 0;
+            background: #333;
+            overflow: hidden;
+        }
+
+        #game-container {
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
-            background: #333;
+            height: 100vh;
+        }
+
+        canvas {
+            display: block;
+            margin: auto;
+            border: 2px solid #222;
+            background: #222;
         }
     </style>
 </head>
 
 <body>
-    <h2>Bouncing Ball!</h2>
-    <div></div>
+    <div id="game-container"></div>
+    <script src="script.js"></script>
+    <script>
+        // Phaser will auto-append the canvas to the body or game-container if specified in config
+        // If you want to force the canvas into #game-container, set parent in Phaser config
+        // So, update your script.js config to:
+        // const config = { ..., parent: 'game-container', ... }
+    </script>
 </body>
 
 </html>
