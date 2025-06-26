@@ -30,6 +30,14 @@ const ENEMY_STATS = {
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
 };
 
+// Tower stats
+const TOWER_STATS = {
+    "Commander.png":   { range: 120, damage: 1, firerate: 40, cost: 20, isCommander: true },
+    "Minigunner.png":  { range: 100, damage: 1, firerate: 10, cost: 30 },
+    "Scout.png":       { range: 80,  damage: 2, firerate: 30, cost: 15 },
+    "Shotgun.png":     { range: 60,  damage: 4, firerate: 50, cost: 25 }
+};
+
 const config = {
     type: Phaser.AUTO,
     width: WIDTH,
@@ -55,6 +63,10 @@ let enemySpawnInterval = 80;
 let towers;
 let selectedTowerIndex = 0;
 let placingTower = false;
+let draggingTower = null;
+let draggingTowerSprite = null;
+let sidebarGraphics;
+let playerMoney = 100;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -92,6 +104,46 @@ function create() {
         }
         if (event.key.toLowerCase() === 't') {
             placingTower = !placingTower;
+        }
+    });
+
+    // Sidebar for towers
+    sidebarGraphics = this.add.graphics();
+    drawSidebar.call(this);
+    // Sidebar tower icons (for drag and drop)
+    TOWER_ASSETS.forEach((asset, i) => {
+        let iconY = 60 + i * 90;
+        let icon = this.add.sprite(40, iconY, asset).setInteractive();
+        icon.setDisplaySize(48, 48);
+        icon.setDepth(10);
+        icon.on('pointerdown', pointer => {
+            if (playerMoney >= TOWER_STATS[asset].cost) {
+                draggingTower = asset;
+                draggingTowerSprite = this.add.sprite(pointer.x, pointer.y, asset);
+                draggingTowerSprite.setDisplaySize(48, 48);
+                draggingTowerSprite.setAlpha(0.7);
+                draggingTowerSprite.setDepth(20);
+            }
+        });
+        icon.on('pointerover', () => { icon.setAlpha(0.8); });
+        icon.on('pointerout', () => { icon.setAlpha(1); });
+    });
+    // Drag and drop logic
+    this.input.on('pointermove', pointer => {
+        if (draggingTowerSprite) {
+            draggingTowerSprite.x = pointer.x;
+            draggingTowerSprite.y = pointer.y;
+        }
+    });
+    this.input.on('pointerup', pointer => {
+        if (draggingTower && draggingTowerSprite) {
+            // Only allow placement in play area (not sidebar)
+            if (pointer.x > 100 && pointer.x < WIDTH && pointer.y > 0 && pointer.y < HEIGHT) {
+                placeTower.call(this, pointer.x, pointer.y, draggingTower);
+            }
+            draggingTowerSprite.destroy();
+            draggingTower = null;
+            draggingTowerSprite = null;
         }
     });
 }
@@ -160,15 +212,43 @@ function drawHealthBar() {
     healthBar.strokeRect(x, y, barWidth, barHeight);
 }
 
-function placeTower(x, y) {
-    // Prevent placing on the ball
+function drawSidebar() {
+    sidebarGraphics.clear();
+    sidebarGraphics.fillStyle(0x222244, 1);
+    sidebarGraphics.fillRect(0, 0, 100, HEIGHT);
+    this.add.text(10, 10, 'Towers', { fontSize: '18px', fill: '#fff' });
+    TOWER_ASSETS.forEach((asset, i) => {
+        let stats = TOWER_STATS[asset];
+        let y = 60 + i * 90;
+        this.add.text(70, y - 20, `R:${stats.range}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y - 5, `D:${stats.damage}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y + 10, `F:${stats.firerate}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y + 25, `$${stats.cost}`, { fontSize: '12px', fill: '#ff0' });
+        if (stats.isCommander) {
+            this.add.text(10, y + 35, 'Commander: Reduces firerate of towers in range', { fontSize: '10px', fill: '#0ff' });
+        }
+    });
+    this.add.text(10, HEIGHT - 40, `Money: $${playerMoney}`, { fontSize: '14px', fill: '#0f0' });
+}
+
+function placeTower(x, y, asset) {
+    // Prevent placing on the ball or sidebar
     let dx = x - ball.x;
     let dy = y - ball.y;
-    if (Math.sqrt(dx * dx + dy * dy) < ballSize) return;
-    let asset = TOWER_ASSETS[selectedTowerIndex];
+    if (Math.sqrt(dx * dx + dy * dy) < ballSize || x < 100) return;
+    let stats = TOWER_STATS[asset];
+    if (playerMoney < stats.cost) return;
     let tower = this.add.sprite(x, y, asset);
     tower.setDisplaySize(48, 48);
+    tower.towerType = asset;
+    tower.range = stats.range;
+    tower.damage = stats.damage;
+    tower.firerate = stats.firerate;
+    tower.isCommander = !!stats.isCommander;
+    tower.lastShot = 0;
     towers.add(tower);
+    playerMoney -= stats.cost;
+    drawSidebar.call(this);
 }
 
 function gameOver() {
