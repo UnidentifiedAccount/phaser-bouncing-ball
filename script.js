@@ -45,7 +45,7 @@ const ENEMY_CASH = {
 // Tower stats
 const TOWER_STATS = {
     "Commander.png":   { range: 150, damage: 1, firerate: 5, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 200, damage: 1, firerate: 1, cost: 150 },
+    "Minigunner.png":  { range: 200, damage: 1, firerate: 0.5, cost: 150 },
     "Scout.png":       { range: 100,  damage: 5, firerate: 3, cost: 40 },
     "Shotgun.png":     { range: 75,  damage: 3, firerate: 6, cost:  50},
 };
