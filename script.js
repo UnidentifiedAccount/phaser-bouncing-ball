@@ -213,6 +213,7 @@ let waveTransitionActive = false;
 let waveCompleteText = null;
 let punishmentText = null;
 let specialLongTransition = false;
+let phase2Text = null;
 
 function update(time, delta) {
     // --- Wave Spawning ---
@@ -228,7 +229,7 @@ function update(time, delta) {
             waveTransitionTimer = 0;
             specialLongTransition = false;
             if (waveCompleteText && waveCompleteText.destroy) waveCompleteText.destroy();
-            if (punishmentText && punishmentText.destroy) punishmentText.destroy();
+            if (punishmentText && punishmentText.destroy) { punishmentText.destroy(); punishmentText = null; } // Ensure message disappears
             if (currentWave < WAVES.length) {
                 startWave.call(this, currentWave);
             }
@@ -271,19 +272,30 @@ function update(time, delta) {
             timerObj.timer = 0;
         }
     }
-    // --- Executioner Kill Mechanic (nerfed) ---
+    // --- Executioner Kill Mechanic (nerfed, but buffed in phase 2) ---
     executionerKillTimer += delta || 16;
-    if (executionerKillTimer > 3000) { // Now every 3 seconds
+    if (executionerKillTimer > 3000) { // Every 3 seconds
         let executioners = enemies.getChildren().filter(e => e.texture.key === "ExecutionerPlush.png");
         if (executioners.length > 0) {
             let allTowers = towers.getChildren().filter(t => t.active);
             Phaser.Utils.Array.Shuffle(allTowers);
-            let toKill = allTowers.slice(0, 2); // Now kills 2 towers
-            toKill.forEach(tower => {
-                tower.destroy();
-            });
-            // Show "DIE!" above each executioner
             executioners.forEach(exec => {
+                // PHASE 2 BUFF: kill 3 and stun 1 tower every 3s
+                if (exec.phase2) {
+                    let phase2Towers = allTowers.slice(0, 4); // 3 to kill, 1 to stun
+                    let toKill = phase2Towers.slice(0, 3);
+                    let toStun = phase2Towers[3];
+                    toKill.forEach(tower => { if (tower) tower.destroy(); });
+                    if (toStun && !toStun.stunned) {
+                        toStun.stunned = true;
+                        toStun.stunTime = 3000;
+                    }
+                } else {
+                    // Normal: kill 2 towers
+                    let toKill = allTowers.slice(0, 2);
+                    toKill.forEach(tower => { if (tower) tower.destroy(); });
+                }
+                // Show "DIE!" above each executioner
                 if (!exec.dieText || !exec.dieText.active) {
                     exec.dieText = this.add.text(exec.x, exec.y - 40, 'DIE!', {
                         fontSize: '24px',
@@ -451,13 +463,22 @@ function update(time, delta) {
                 }
                 spawnEnemyAtEdge.call(this, "ReaperAct2_refreshed.png");
                 enemy.hasSummonedPhase2 = true;
-                this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
+                enemy.phase2 = true;
+                // Track phase2 indicator for this executioner
+                if (enemy.phase2Text && enemy.phase2Text.destroy) enemy.phase2Text.destroy();
+                enemy.phase2Text = this.add.text(enemy.x, enemy.y - 60, 'PHASE 2!', { fontSize: '24px', fill: '#00f', fontStyle: 'bold', fontFamily: 'Arial', align: 'center' }).setOrigin(0.5, 1).setDepth(100);
+            }
+            // Remove phase2 indicator if executioner dies
+            if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.phase2Text && enemy.phase2Text.destroy) {
+                enemy.phase2Text.destroy();
+                enemy.phase2Text = null;
             }
             // If Executioner reaches the base, instant game over
             if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
                 ballHealth = 0;
                 drawHealthBar();
                 gameOver.call(this);
+                if (enemy.phase2Text && enemy.phase2Text.destroy) { enemy.phase2Text.destroy(); enemy.phase2Text = null; }
                 enemy.destroy();
             }
         } else if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
