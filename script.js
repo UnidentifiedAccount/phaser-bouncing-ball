@@ -44,10 +44,10 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 150, damage: 4, firerate: 12, cost: 100, isCommander: true },
-    "Minigunner.png":  { range: 120, damage: 2, firerate: 0.5, cost: 125 },
+    "Commander.png":   { range: 150, damage: 4, firerate: 12, cost: 110, isCommander: true },
+    "Minigunner.png":  { range: 120, damage: 2, firerate: 0.5, cost: 130 },
     "Scout.png":       { range: 80,  damage: 5, firerate: 9, cost: 25 },
-    "Shotgun.png":     { range: 60,  damage: 3, firerate: 6, cost:  40},
+    "Shotgun.png":     { range: 60,  damage: 3, firerate: 6, cost:  45},
 };
 
 // --- HP MODIFIER CONFIG ---
