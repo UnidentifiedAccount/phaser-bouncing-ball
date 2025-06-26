@@ -25,9 +25,21 @@ const ENEMY_STATS = {
     "ExecutionerPlush.png":{ speed: 0.5, health: 300 },
     "GhostLunar.png":      { speed: 1.8, health: 2 },
     "KnightLunar.png":     { speed: 1.1, health: 5 },
-    "LO_Marionette.png":   { speed: 1.3, health: 10 },
+    "LO_Marionette.png":   { speed: 2, health: 10 },
     "ReaperAct2_refreshed.png": { speed: 0.8, health: 50 },
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
+};
+
+// Cash rewards per enemy type
+const ENEMY_CASH = {
+    "CitizenPlush.png": 20,
+    "CobaltGuardLunar.png": 100,
+    "ExecutionerPlush.png": 400,
+    "GhostLunar.png": 30,
+    "KnightLunar.png": 50,
+    "LO_Marionette.png": 60,
+    "ReaperAct2_refreshed.png": 120,
+    "SinRealtdsnobackground.png": 0
 };
 
 // Tower stats
@@ -229,7 +241,7 @@ function update(time, delta) {
             waveTimer = 0;
         }
     }
-    // --- Reaper Summoning SinRealtdsnobackground.png (buffed to 1 per second) ---
+    // --- Reaper Summoning SinRealtdsnobackground.png (nerfed to 1 per 2 seconds) ---
     for (let i = reaperSummonTimers.length - 1; i >= 0; i--) {
         let timerObj = reaperSummonTimers[i];
         timerObj.timer += delta || 16;
@@ -245,7 +257,7 @@ function update(time, delta) {
             reaperSummonTimers.splice(i, 1);
             continue;
         }
-        if (timerObj.timer > 1000) { // 1 per second
+        if (timerObj.timer > 2000) { // 1 per 2 seconds
             for (let j = 0; j < 3; j++) {
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
@@ -278,13 +290,19 @@ function update(time, delta) {
             });
         }
     });
-    // --- Reaper Kill Mechanic (kill all towers on contact) ---
+    // --- Reaper Kill Mechanic (kill all towers on contact, refund 75% of cost) ---
     enemies.getChildren().forEach(enemy => {
         if (enemy.texture.key === "ReaperAct2_refreshed.png") {
             towers.getChildren().forEach(tower => {
                 let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
                 if (d < 30) {
-                    towers.getChildren().forEach(t => t.destroy());
+                    towers.getChildren().forEach(t => {
+                        if (t.towerCost) {
+                            playerMoney += Math.floor(t.towerCost * 0.75);
+                        }
+                        t.destroy();
+                    });
+                    drawSidebar.call(this);
                 }
             });
         }
@@ -346,16 +364,42 @@ function update(time, delta) {
         enemies.getChildren().forEach(enemy => {
             let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
             if (d < 24) {
+                if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
+                if (bullet.piercedEnemies.has(enemy)) return;
+                bullet.piercedEnemies.add(enemy);
                 enemy.enemyHealth -= bullet.damage;
-                bullets.splice(i, 1);
+                if (!bullet.piercing) bullets.splice(i, 1);
                 if (enemy.enemyHealth <= 0) {
+                    let cash = ENEMY_CASH[enemy.texture.key] || 0;
                     enemy.destroy();
-                    playerMoney += 10;
+                    playerMoney += cash;
                     drawSidebar.call(this);
                 }
             }
         });
     }
+    // --- Move enemies toward the ball (fix: use correct reference for ball position) ---
+    enemies.getChildren().forEach(enemy => {
+        if (!ball || !enemy) return;
+        let dx = ball.x - enemy.x;
+        let dy = ball.y - enemy.y;
+        let dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 2) {
+            let moveX = (dx / dist) * enemy.enemySpeed;
+            let moveY = (dy / dist) * enemy.enemySpeed;
+            enemy.x += moveX;
+            enemy.y += moveY;
+        }
+        // Check collision with ball
+        if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
+            enemy.destroy();
+            ballHealth--;
+            drawHealthBar();
+            if (ballHealth <= 0) {
+                gameOver.call(this);
+            }
+        }
+    });
     // --- End of wave check ---
     if (waveInProgress && waveQueue.length === 0 && enemies.getLength() === 0) {
         waveInProgress = false;
@@ -410,10 +454,15 @@ function drawSidebar() {
     sidebarGraphics.clear();
     sidebarGraphics.fillStyle(0x222244, 1);
     sidebarGraphics.fillRect(0, 0, 100, HEIGHT);
-    this.add.text(10, 10, 'Towers', { fontSize: '18px', fill: '#fff' });
+    // Wave indicator
+    let waveText = `Wave: ${Math.min(currentWave + 1, WAVES.length)}/${WAVES.length}`;
+    this.add.text(10, 10, waveText, { fontSize: '16px', fill: '#fff' });
+    // Cash indicator
+    this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
+    this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
     TOWER_ASSETS.forEach((asset, i) => {
         let stats = TOWER_STATS[asset];
-        let y = 60 + i * 90;
+        let y = 80 + i * 90;
         this.add.text(70, y - 20, `R:${stats.range}`, { fontSize: '12px', fill: '#fff' });
         this.add.text(70, y - 5, `D:${stats.damage}`, { fontSize: '12px', fill: '#fff' });
         this.add.text(70, y + 10, `F:${stats.firerate}`, { fontSize: '12px', fill: '#fff' });
@@ -422,7 +471,6 @@ function drawSidebar() {
             this.add.text(10, y + 35, 'Commander: Reduces firerate of towers in range', { fontSize: '10px', fill: '#0ff' });
         }
     });
-    this.add.text(10, HEIGHT - 40, `Money: $${playerMoney}`, { fontSize: '14px', fill: '#0f0' });
 }
 
 function placeTower(x, y, asset) {
@@ -440,6 +488,7 @@ function placeTower(x, y, asset) {
     tower.firerate = stats.firerate;
     tower.isCommander = !!stats.isCommander;
     tower.lastShot = 0;
+    tower.towerCost = stats.cost; // Track cost for refund
     towers.add(tower);
     playerMoney -= stats.cost;
     drawSidebar.call(this);
@@ -448,19 +497,35 @@ function placeTower(x, y, asset) {
 function fireBullet(tower, target) {
     let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
     let speed = 6;
-    // Use a graphics object for bullet visuals
-    let bullet = {
-        x: tower.x,
-        y: tower.y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        lifetime: 60,
-        damage: tower.damage
-    };
-    bullets.push(bullet);
+    if (tower.towerType === "Shotgun.png") {
+        // Shotgun: 3 piercing bullets in a spread
+        for (let i = -1; i <= 1; i++) {
+            let spread = angle + i * 0.18; // ~10 degrees
+            let bullet = {
+                x: tower.x,
+                y: tower.y,
+                vx: Math.cos(spread) * speed,
+                vy: Math.sin(spread) * speed,
+                lifetime: 20,
+                damage: tower.damage,
+                piercing: true,
+                piercedEnemies: new Set()
+            };
+            bullets.push(bullet);
+        }
+    } else {
+        let bullet = {
+            x: tower.x,
+            y: tower.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            lifetime: 60,
+            damage: tower.damage
+        };
+        bullets.push(bullet);
+    }
 }
 
-// Draw bullets manually
 function renderBullets(graphics) {
     bullets.getChildren().forEach(bullet => {
         graphics.fillStyle(0xffff00, 1);
