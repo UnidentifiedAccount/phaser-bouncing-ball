@@ -21,33 +21,33 @@ const TOWER_ASSETS = [
 // Assign stats for each enemy asset
 const ENEMY_STATS = {
     "CitizenPlush.png":    { speed: 1.0, health: 3 },
-    "CobaltGuardLunar.png":{ speed: 0.8, health: 10 },
-    "ExecutionerPlush.png":{ speed: 0.5, health: 300 },
-    "GhostLunar.png":      { speed: 1.8, health: 2 },
-    "KnightLunar.png":     { speed: 1.1, health: 5 },
-    "LO_Marionette.png":   { speed: 2, health: 10 },
-    "ReaperAct2_refreshed.png": { speed: 0.8, health: 50 },
+    "CobaltGuardLunar.png":{ speed: 0.8, health: 30 },
+    "ExecutionerPlush.png":{ speed: 0.3, health: 250 },
+    "GhostLunar.png":      { speed: 1.2, health: 4 },
+    "KnightLunar.png":     { speed: 1.1, health: 10 },
+    "LO_Marionette.png":   { speed: 2, health: 15},
+    "ReaperAct2_refreshed.png": { speed: 0.5, health: 50 },
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
 };
 
 // Cash rewards per enemy type
 const ENEMY_CASH = {
-    "CitizenPlush.png": 20,
-    "CobaltGuardLunar.png": 100,
+    "CitizenPlush.png": 25,
+    "CobaltGuardLunar.png": 90,
     "ExecutionerPlush.png": 400,
-    "GhostLunar.png": 30,
-    "KnightLunar.png": 50,
-    "LO_Marionette.png": 60,
-    "ReaperAct2_refreshed.png": 120,
+    "GhostLunar.png": 40,
+    "KnightLunar.png": 60,
+    "LO_Marionette.png": 75,
+    "ReaperAct2_refreshed.png": 100,
     "SinRealtdsnobackground.png": 0
 };
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 120, damage: 1, firerate: 5, cost: 75, isCommander: true },
-    "Minigunner.png":  { range: 100, damage: 1, firerate: 0.1, cost: 200 },
-    "Scout.png":       { range: 80,  damage: 2, firerate: 3, cost: 30 },
-    "Shotgun.png":     { range: 60,  damage: 4, firerate: 5, cost: 50 }
+    "Commander.png":   { range: 300, damage: 1, firerate: 5, cost: 75, isCommander: true },
+    "Minigunner.png":  { range: 150, damage: 1, firerate: 0.1, cost: 200 },
+    "Scout.png":       { range: 100,  damage: 2, firerate: 2, cost: 30 },
+    "Shotgun.png":     { range: 40,  damage: 3, firerate: 6, cost: 50 }
 };
 
 const config = {
