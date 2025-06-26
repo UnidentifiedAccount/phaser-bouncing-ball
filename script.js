@@ -364,6 +364,7 @@ function update(time, delta) {
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
         let effectiveFirerate = (tower.firerate * firerateBuff) * 60; // convert to ms
+        effectiveFirerate = Math.max(effectiveFirerate, 30); // Clamp: minimum 30ms between shots
         if (tower.lastShot >= effectiveFirerate) {
             // Find nearest enemy in range
             let target = null;
