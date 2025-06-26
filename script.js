@@ -44,9 +44,9 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 100, damage: 4, firerate: 8, cost: 100, isCommander: true },
+    "Commander.png":   { range: 100, damage: 4, firerate: 10, cost: 100, isCommander: true },
     "Minigunner.png":  { range: 150, damage: 2, firerate: 0.5, cost: 150 },
-    "Scout.png":       { range: 85,  damage: 5, firerate: 3, cost: 20 },
+    "Scout.png":       { range: 85,  damage: 5, firerate: 8, cost: 20 },
     "Shotgun.png":     { range: 70,  damage: 3, firerate: 6, cost:  40},
 };
 
@@ -524,6 +524,16 @@ function update(time, delta) {
                 enemy.phase2Text.destroy();
                 enemy.phase2Text = null;
             }
+            // Remove healthbar if executioner dies
+            if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.execHealthBar) {
+                enemy.execHealthBar.clear();
+                enemy.execHealthBar.destroy();
+                enemy.execHealthBar = null;
+            }
+            if ((!enemy.active || enemy.enemyHealth <= 0) && enemy.execHealthBarText) {
+                enemy.execHealthBarText.destroy();
+                enemy.execHealthBarText = null;
+            }
             // If Executioner reaches the base, instant game over
             if (dist < (ballSize / 2 + enemy.displayHeight / 2)) {
                 ballHealth = 0;
@@ -796,7 +806,10 @@ function placeTower(x, y, asset) {
     tower.isCommander = !!stats.isCommander;
     tower.lastShot = 0;
     tower.towerCost = stats.cost; // Track cost for refund
-    if (asset === "Minigunner.png") tower.beamTimer = 0; // Always initialize beamTimer
+    if (asset === "Minigunner.png") {
+        tower.beamTimer = 0; // Always initialize beamTimer
+        tower.hasSecondChance = true; // Minigunner gets a second chance
+    }
     towers.add(tower);
     playerMoney -= stats.cost;
     drawSidebar.call(this);
@@ -845,3 +858,68 @@ function gameOver() {
     this.add.text(WIDTH / 2 - 80, HEIGHT / 2, "Game Over!", { fontSize: '32px', fill: '#ff0000' });
     this.scene.pause();
 }
+
+// --- Bullet Logic ---
+bulletGraphics.clear();
+for (let i = bullets.length - 1; i >= 0; i--) {
+    let bullet = bullets[i];
+    bullet.x += bullet.vx;
+    bullet.y += bullet.vy;
+    bullet.lifetime--;
+    bulletGraphics.fillStyle(0xffff00, 1);
+    bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+    if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
+        bullets.splice(i, 1);
+        continue;
+    }
+    enemies.getChildren().forEach(enemy => {
+        if (!enemy.active) return;
+        let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+        if (d < 24) {
+            if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
+            if (bullet.piercedEnemies.has(enemy)) return;
+            bullet.piercedEnemies.add(enemy);
+            enemy.enemyHealth -= bullet.damage;
+            if (!bullet.piercing) bullets.splice(i, 1);
+            if (enemy.enemyHealth <= 0) {
+                let cash = ENEMY_CASH[enemy.texture.key] || 0;
+                // --- Wave 5 death counter for Executioner spawn ---
+                if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
+                    window.wave5DeathCounter++;
+                }
+                enemy.destroy();
+                playerMoney += cash;
+                sidebarNeedsUpdate = true;
+            }
+        }
+    });
+}
+// --- Tower special death logic (Minigunner second chance) ---
+// This must be after all destroy() calls for towers in the frame
+let towersToRemove = [];
+towers.getChildren().forEach(tower => {
+    if (!tower.active) return;
+    if (tower._pendingDestroy) {
+        // Already handled
+        return;
+    }
+    // Check if tower was destroyed this frame (by enemy or mechanic)
+    if (!tower.scene) return; // Already destroyed
+    // If Minigunner and hasSecondChance, intercept destroy
+    if (tower.towerType === "Minigunner.png" && tower.hasSecondChance) {
+        // If about to be destroyed, stun instead
+        if (tower.stunned) {
+            // Already stunned, allow death
+            towersToRemove.push(tower);
+        } else {
+            // Stun instead of death, lose second chance
+            tower.stunned = true;
+            tower.stunTime = 6000; // 6 seconds stun
+            tower.hasSecondChance = false;
+            // Visual feedback: flash blue
+            tower.setTint(0x3399ff);
+            setTimeout(() => { if (tower.clearTint) tower.clearTint(); }, 400);
+        }
+    }
+});
+towersToRemove.forEach(tower => { tower._pendingDestroy = true; tower.destroy(); });
