@@ -20,13 +20,13 @@ const TOWER_ASSETS = [
 
 // Assign stats for each enemy asset
 const ENEMY_STATS = {
-    "CitizenPlush.png":    { speed: 1.0, health: 3 },
-    "CobaltGuardLunar.png":{ speed: 0.8, health: 30 },
+    "CitizenPlush.png":    { speed: 1.0, health: 4 },
+    "CobaltGuardLunar.png":{ speed: 0.8, health: 50 },
     "ExecutionerPlush.png":{ speed: 0.3, health: 300 },
-    "GhostLunar.png":      { speed: 1.2, health: 4 },
-    "KnightLunar.png":     { speed: 2, health: 6 },
-    "LO_Marionette.png":   { speed: 1.5, health: 15},
-    "ReaperAct2_refreshed.png": { speed: 0.5, health: 50 },
+    "GhostLunar.png":      { speed: 1.2, health: 5 },
+    "KnightLunar.png":     { speed: 2, health: 10 },
+    "LO_Marionette.png":   { speed: 1.5, health: 25},
+    "ReaperAct2_refreshed.png": { speed: 0.5, health: 60 },
     "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
 };
 
