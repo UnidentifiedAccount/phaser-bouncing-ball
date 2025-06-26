@@ -423,9 +423,9 @@ function update(time, delta) {
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
         if (!tower.isCommander) {
-            // Commander buff: 1.5x faster (firerate * 0.666), not stackable
+            // Commander buff: 2.5x faster (firerate * 0.4), not stackable
             let inRangeOfCommander = towers.getChildren().some(other => other.isCommander && Math.sqrt((tower.x - other.x) ** 2 + (tower.y - other.y) ** 2) < other.range);
-            if (inRangeOfCommander) firerateBuff *= 0.666; // 1.5x faster
+            if (inRangeOfCommander) firerateBuff *= 0.266; // 3.75x faster (1.5x as fast as previous 2.5x)
         }
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
