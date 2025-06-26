@@ -67,6 +67,11 @@ let draggingTower = null;
 let draggingTowerSprite = null;
 let sidebarGraphics;
 let playerMoney = 100;
+// --- Tower Defense Game Core Logic ---
+// Add bullet group
+let bullets;
+// Add a render layer for bullets
+let bulletGraphics;
 
 function preload() {
     this.load.image("ball", "assets/ball.png");
@@ -89,7 +94,8 @@ function create() {
 
     // Tower group
     towers = this.add.group();
-
+    // Bullet group
+    bullets = this.physics.add.group();
     // Input for placing towers
     this.input.on('pointerdown', pointer => {
         if (placingTower) {
@@ -137,7 +143,6 @@ function create() {
     });
     this.input.on('pointerup', pointer => {
         if (draggingTower && draggingTowerSprite) {
-            // Only allow placement in play area (not sidebar)
             if (pointer.x > 100 && pointer.x < WIDTH && pointer.y > 0 && pointer.y < HEIGHT) {
                 placeTower.call(this, pointer.x, pointer.y, draggingTower);
             }
@@ -146,16 +151,16 @@ function create() {
             draggingTowerSprite = null;
         }
     });
+    bulletGraphics = this.add.graphics();
 }
 
-function update() {
+function update(time, delta) {
     // Spawn enemies at intervals
     enemySpawnTimer++;
     if (enemySpawnTimer >= enemySpawnInterval) {
         spawnEnemy.call(this);
         enemySpawnTimer = 0;
     }
-
     // Move enemies toward the ball
     enemies.getChildren().forEach(enemy => {
         let dx = ball.x - enemy.x;
@@ -175,6 +180,64 @@ function update() {
             }
         }
     });
+    // --- Tower Firing Logic ---
+    towers.getChildren().forEach(tower => {
+        // Commander passive: reduce firerate of other towers in range
+        let firerateBuff = 1;
+        if (!tower.isCommander) {
+            towers.getChildren().forEach(other => {
+                if (other.isCommander) {
+                    let d = Math.sqrt((tower.x - other.x) ** 2 + (tower.y - other.y) ** 2);
+                    if (d < other.range) firerateBuff *= 0.7; // 30% faster
+                }
+            });
+        }
+        if (!tower.lastShot) tower.lastShot = 0;
+        tower.lastShot += delta;
+        let effectiveFirerate = tower.firerate * firerateBuff;
+        if (tower.lastShot >= effectiveFirerate) {
+            // Find nearest enemy in range
+            let target = null;
+            let minDist = Infinity;
+            enemies.getChildren().forEach(enemy => {
+                let d = Math.sqrt((tower.x - enemy.x) ** 2 + (tower.y - enemy.y) ** 2);
+                if (d < tower.range && d < minDist) {
+                    minDist = d;
+                    target = enemy;
+                }
+            });
+            if (target) {
+                fireBullet.call(this, tower, target);
+                tower.lastShot = 0;
+            }
+        }
+    });
+    // --- Bullet Logic ---
+    bulletGraphics.clear();
+    bullets.getChildren().forEach(bullet => {
+        bullet.x += bullet.vx;
+        bullet.y += bullet.vy;
+        bullet.lifetime--;
+        // Remove bullet if out of lifetime or out of bounds
+        if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
+            bullet.destroy();
+        } else {
+            // Check collision with enemies
+            enemies.getChildren().forEach(enemy => {
+                let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                if (d < 24) {
+                    enemy.enemyHealth -= bullet.damage;
+                    bullet.destroy();
+                    if (enemy.enemyHealth <= 0) {
+                        enemy.destroy();
+                        playerMoney += 2;
+                        drawSidebar.call(this);
+                    }
+                }
+            });
+        }
+    });
+    renderBullets(bulletGraphics);
 }
 
 function spawnEnemy() {
@@ -249,6 +312,31 @@ function placeTower(x, y, asset) {
     towers.add(tower);
     playerMoney -= stats.cost;
     drawSidebar.call(this);
+}
+
+function fireBullet(tower, target) {
+    let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
+    let speed = 6;
+    // Use a graphics object for bullet visuals
+    let bullet = bullets.create(tower.x, tower.y, null);
+    bullet.setData('isBullet', true);
+    bullet.vx = Math.cos(angle) * speed;
+    bullet.vy = Math.sin(angle) * speed;
+    bullet.lifetime = 60;
+    bullet.damage = tower.damage;
+    // Use a circle for bullet visuals
+    bullet.displayWidth = 8;
+    bullet.displayHeight = 8;
+    bullet.setVisible(false); // Hide default sprite
+    // Draw bullet manually in update
+}
+
+// Draw bullets manually
+function renderBullets(graphics) {
+    bullets.getChildren().forEach(bullet => {
+        graphics.fillStyle(0xffff00, 1);
+        graphics.fillCircle(bullet.x, bullet.y, 4);
+    });
 }
 
 function gameOver() {
