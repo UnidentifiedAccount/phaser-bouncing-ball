@@ -351,7 +351,7 @@ function update(time, delta) {
     });
     // --- Tower Firing Logic ---
     let bulletsSpawnedThisFrame = 0;
-    const BULLET_SPAWN_LIMIT_PER_FRAME = 100;
+    const BULLET_SPAWN_LIMIT_PER_FRAME = 1000;
     towers.getChildren().forEach(tower => {
         if (tower.stunned) return; // Stunned towers can't attack
         let firerateBuff = 1;
