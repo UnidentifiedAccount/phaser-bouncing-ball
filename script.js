@@ -115,7 +115,8 @@ const WAVES = [
     ],
     [ // Wave 3
         { type: "KnightLunar.png", count: 8 },
-        { type: "CobaltGuardLunar.png", count: 2 }
+        { type: "CobaltGuardLunar.png", count: 2 },
+        { type: "LO_Marionette.png", count: 10 } // Add 10 Marionettes
     ],
     [ // Wave 4
         { type: "CobaltGuardLunar.png", count: 4 },
@@ -123,11 +124,11 @@ const WAVES = [
     ],
     [ // Wave 5 (Final)
         { type: "CitizenPlush.png", count: 20 },
-        { type: "CobaltGuardLunar.png", count: 5 },
+        { type: "CobaltGuardLunar.png", count: 8 }, // 5 more (was 5)
         { type: "ExecutionerPlush.png", count: 1 },
-        { type: "ReaperAct2_refreshed.png", count: 3 },
+        { type: "ReaperAct2_refreshed.png", count: 4 }, // 1 more (was 3)
         { type: "GhostLunar.png", count: 10 },
-        { type: "KnightLunar.png", count: 15 },
+        { type: "KnightLunar.png", count: 20 }, // 5 more (was 15)
         { type: "LO_Marionette.png", count: 5 }
     ]
 ];
