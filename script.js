@@ -235,7 +235,7 @@ function create() {
     let hpText = this.add.text(16, HEIGHT - 26, 'HP+', { fontSize: '16px', fill: '#fff', fontStyle: 'bold' }).setOrigin(0, 0);
     hpModifierIcon.on('pointerover', () => {
         if (hpModifierTooltip && hpModifierTooltip.destroy) hpModifierTooltip.destroy();
-        hpModifierTooltip = this.add.text(45, HEIGHT - 38, 'Enemy HP increases by 10% per wave after first appearance.', {
+        hpModifierTooltip = this.add.text(45, HEIGHT - 38, 'Enemy HP increases by 13% per wave after first appearance.', {
             fontSize: '14px', fill: '#fff', backgroundColor: '#222', padding: { left: 6, right: 6, top: 2, bottom: 2 }
         }).setDepth(200).setOrigin(0, 0);
     });
@@ -728,7 +728,7 @@ function spawnEnemy(type) {
     // --- Apply HP modifier ---
     let firstWave = ENEMY_HP_MODIFIER[type] ?? 0;
     let bonusWaves = typeof currentWave === 'number' ? Math.max(0, currentWave - firstWave) : 0;
-    let bonusHp = Math.ceil(stats.health * 0.1 * bonusWaves);
+    let bonusHp = Math.ceil(stats.health * 0.13 * bonusWaves); // 13% per wave
     enemy.enemySpeed = stats.speed;
     enemy.enemyHealth = stats.health + bonusHp;
     // Assign unique id for reaper kill timer
