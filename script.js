@@ -64,7 +64,7 @@ const ENEMY_HP_MODIFIER = {
     "ReaperAct2_refreshed.png": 3,
     "ExecutionerPlush.png": 4,
     "SinRealtdsnobackground.png": 3,
-    "demon.png": 5 // Demon only appears after wave 5, but only via Reaper
+    "demon.png": 4 // Demon only appears after wave 5, but only via Reaper
 };
 
 // --- WAVE REWARD CONFIG ---
@@ -265,13 +265,45 @@ function update(time, delta) {
     // Handle wave transition delay
     if (waveTransitionActive) {
         waveTransitionTimer += delta || 16;
-        let transitionDuration = specialLongTransition ? 10000 : 2000;
+        let transitionDuration = 10000; // 10 seconds between waves
+        // --- Show different interval text and color for each transition ---
+        let intervalText = 'You should repent commander.The cult deems you guilty of your sins.';
+        let intervalColor = '#8844ff'; // purple by default
+        let intervalFontSize = '7px';
+        if (currentWave === 1) {
+            intervalText = 'You should repent commander. The cult deems you GUILTY of your sins.';
+            intervalColor = '#8844ff';
+        } 
+        else if (currentWave === 2) {
+            intervalText = 'Stop resisting and accept your punishment. It is HIS will';
+            intervalColor = '#a000c8'; // purple-red blend
+
+        } else if (currentWave === 3) {
+            intervalText = "You are really are stubborn aren't you. Guess I'll have to kill you myself.";
+            intervalColor = '#c00044'; // more red
+
+        } else if (currentWave === 4) {
+            intervalText = "Puny mortal, for your crimes, thy Punishment is DEATH";
+            intervalColor = '#ff0000'; // pure red
+        } else {
+            intervalText = '';
+        }
+        if (!this.customIntervalText && intervalText) {
+            this.customIntervalText = this.add.text(WIDTH / 2, HEIGHT / 2, intervalText, {
+                fontSize: '28px',
+                fill: intervalColor,
+                fontStyle: 'bold',
+                fontFamily: 'Arial',
+                align: 'center'
+            }).setOrigin(0.5, 0.5).setDepth(200);
+        }
         if (waveTransitionTimer > transitionDuration) {
             waveTransitionActive = false;
             waveTransitionTimer = 0;
             specialLongTransition = false;
             if (waveCompleteText && waveCompleteText.destroy) waveCompleteText.destroy();
-            if (punishmentText && punishmentText.destroy) { punishmentText.destroy(); punishmentText = null; } // Ensure message disappears
+            if (punishmentText && punishmentText.destroy) { punishmentText.destroy(); punishmentText = null; }
+            if (this.customIntervalText && this.customIntervalText.destroy) { this.customIntervalText.destroy(); this.customIntervalText = null; }
             if (currentWave < WAVES.length) {
                 startWave.call(this, currentWave);
             }
@@ -612,7 +644,7 @@ function update(time, delta) {
                     fontSize: '32px', fill: '#fff', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
                 }).setOrigin(0.5, 0.5).setDepth(100);
                 punishmentText = this.add.text(WIDTH / 2, HEIGHT / 2 + 10, 'YOU WILL FACE YOUR PUNISHMENT HERETIC', {
-                    fontSize: '28px', fill: '#ff2222', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
+                    fontSize: '14px', fill: '#ff2222', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
                 }).setOrigin(0.5, 0.5).setDepth(101);
                 waveTransitionActive = true;
                 waveTransitionTimer = 0;
@@ -808,9 +840,7 @@ function drawSidebar() {
     // Remove previous text objects if they exist
     if (waveTextObj && waveTextObj.destroy) { waveTextObj.destroy(); waveTextObj = null; }
     if (moneyTextObj && moneyTextObj.destroy) { moneyTextObj.destroy(); moneyTextObj = null; }
-    // Wave indicator
-    let waveText = `Wave: ${Math.min(currentWave + 1, WAVES.length)}/${WAVES.length}`;
-    waveTextObj = this.add.text(10, 10, waveText, { fontSize: '16px', fill: '#fff' });
+    // --- Wave indicator removed as requested ---
     // Cash indicator
     moneyTextObj = this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
     this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
