@@ -27,9 +27,9 @@ const ENEMY_STATS = {
     "GhostLunar.png":      { speed: 1.2, health: 5 },
     "KnightLunar.png":     { speed: 2, health: 10 },
     "LO_Marionette.png":   { speed: 1.3, health: 20},
-    "ReaperAct2_refreshed.png": { speed: 1.0, health: 60 },
+    "ReaperAct2_refreshed.png": { speed: 0.6, health: 60 },
     "SinRealtdsnobackground.png": { speed: 1.5, health: 1 },
-    "demon.png":           { speed: 0.5, health: 130 } // Demon stats
+    "demon.png":           { speed: 0.5, health: 100 } // Demon stats
 };
 
 // Cash rewards per enemy type
@@ -311,9 +311,11 @@ function update(time, delta) {
                 spawnEnemy.call(this, "GhostLunar.png");
             }
             // --- Reaper now also summons 2 demons at edges ---
+            window.allowDemonSpawn = true;
             for (let j = 0; j < 2; j++) {
                 spawnEnemyAtEdge.call(this, "demon.png");
             }
+            window.allowDemonSpawn = false;
             timerObj.timer = 0;
         }
     }
