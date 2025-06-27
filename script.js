@@ -36,8 +36,8 @@ const ENEMY_STATS = {
 const ENEMY_CASH = {
     "CitizenPlush.png": 15,
     "CobaltGuardLunar.png": 60,
-    "ExecutionerPlush.png": -1080,
-    "GhostLunar.png": 25,
+    "ExecutionerPlush.png": -1000,
+    "GhostLunar.png": 20,
     "KnightLunar.png": 40,
     "LO_Marionette.png": 50,
     "ReaperAct2_refreshed.png": 90,
