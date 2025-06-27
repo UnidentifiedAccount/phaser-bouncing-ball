@@ -29,20 +29,20 @@ const ENEMY_STATS = {
     "LO_Marionette.png":   { speed: 1.3, health: 20},
     "ReaperAct2_refreshed.png": { speed: 0.6, health: 60 },
     "SinRealtdsnobackground.png": { speed: 1.5, health: 2 },
-    "demon.png":           { speed: 0.5, health: 70 } // Demon stats
+    "demon.png":           { speed: 0.5, health: 75 } // Demon stats
 };
 
 // Cash rewards per enemy type
 const ENEMY_CASH = {
     "CitizenPlush.png": 15,
     "CobaltGuardLunar.png": 60,
-    "ExecutionerPlush.png": 300,
+    "ExecutionerPlush.png": -1080,
     "GhostLunar.png": 25,
     "KnightLunar.png": 40,
     "LO_Marionette.png": 50,
     "ReaperAct2_refreshed.png": 90,
-    "SinRealtdsnobackground.png": 0,
-    "demon.png": 0 // Demon cash
+    "SinRealtdsnobackground.png": -1,
+    "demon.png": -2 // Demon cash
 };
 
 // Tower stats
@@ -389,23 +389,24 @@ function update(time, delta) {
             continue;
         }
         // --- Reaper ability pause/overheal logic ---
-        if (!reaper.abilityPause) reaper.abilityPause = 0;
-        if (reaper.abilityPause > 0) {
+        if (typeof reaper.abilityPauseTimer !== 'number') reaper.abilityPauseTimer = 0;
+        if (reaper.abilityPauseTimer > 0) {
             // Green glow for ability duration
             if (!timerObj._wasGlowing) {
                 reaper.setTint(0x00ff44);
                 timerObj._wasGlowing = true;
                 timerObj._glowTarget = reaper;
             }
-            // Prevent movement
             reaper.canMove = false;
-            if (reaper.abilityPause <= 0 || !reaper.active) {
+            reaper.abilityPauseTimer -= delta || 16;
+            if (reaper.abilityPauseTimer <= 0) {
                 reaper.canMove = true;
                 if (timerObj._wasGlowing && timerObj._glowTarget && timerObj._glowTarget.clearTint) {
                     timerObj._glowTarget.clearTint();
                     timerObj._wasGlowing = false;
                     timerObj._glowTarget = null;
                 }
+                reaper.abilityPauseTimer = 0;
             }
         } else {
             // Remove green glow if not paused
@@ -414,12 +415,14 @@ function update(time, delta) {
                 timerObj._wasGlowing = false;
                 timerObj._glowTarget = null;
             }
+            reaper.canMove = true;
         }
-        if (timerObj.timer > 2000 && (!reaper.abilityPause || reaper.abilityPause <= 0)) { // 1 per 2 seconds
+        if (timerObj.timer > 2000 && (!reaper.abilityPauseTimer || reaper.abilityPauseTimer <= 0)) { // 1 per 2 seconds
             // --- Ability triggers ---
             // Pause reaper for 1s and overheal
-            reaper.abilityPause = 1000;
-            reaper.enemyHealth += 5; // Nerfed from 10 to 5
+            reaper.abilityPauseTimer = 1000;
+            reaper.canMove = false;
+            reaper.enemyHealth += 10; // Buffed from 5 to 10
             for (let j = 0; j < 3; j++) {
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
@@ -645,6 +648,13 @@ function update(time, delta) {
                 // --- Spawn a Reaper at Executioner's old position before teleporting ---
                 spawnReaperAtPosition.call(this, enemy.x, enemy.y);
                 spawnEnemyAtEdge.call(this, "ReaperAct2_refreshed.png");
+                // --- NEW: Kill 3 random towers and set base HP to 1 ---
+                let allTowers = towers.getChildren().filter(t => t.active);
+                Phaser.Utils.Array.Shuffle(allTowers);
+                let toKill = allTowers.slice(0, 3);
+                toKill.forEach(tower => { if (tower) tower.destroy(); });
+                ballHealth = 1;
+                drawHealthBar();
                 enemy.hasSummonedPhase2 = true;
                 enemy.phase2 = true;
                 // --- PHASE 2 BUFF: Move to edge, heal, increase speed ---
