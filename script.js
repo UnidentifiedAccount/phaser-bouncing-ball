@@ -9,7 +9,8 @@ const ENEMY_ASSETS = [
     "KnightLunar.png",
     "LO_Marionette.png",
     "ReaperAct2_refreshed.png",
-    "SinRealtdsnobackground.png"
+    "SinRealtdsnobackground.png",
+    "demon.png" // Added demon asset
 ];
 const TOWER_ASSETS = [
     "Commander.png",
@@ -25,9 +26,10 @@ const ENEMY_STATS = {
     "ExecutionerPlush.png":{ speed: 0.3, health: 300 },
     "GhostLunar.png":      { speed: 1.2, health: 5 },
     "KnightLunar.png":     { speed: 2, health: 10 },
-    "LO_Marionette.png":   { speed: 1.5, health: 20},
-    "ReaperAct2_refreshed.png": { speed: 0.5, health: 60 },
-    "SinRealtdsnobackground.png": { speed: 1.6, health: 1 }
+    "LO_Marionette.png":   { speed: 1.3, health: 20},
+    "ReaperAct2_refreshed.png": { speed: 1.0, health: 60 },
+    "SinRealtdsnobackground.png": { speed: 1.5, health: 1 },
+    "demon.png":           { speed: 0.5, health: 130 } // Demon stats
 };
 
 // Cash rewards per enemy type
@@ -39,7 +41,8 @@ const ENEMY_CASH = {
     "KnightLunar.png": 40,
     "LO_Marionette.png": 50,
     "ReaperAct2_refreshed.png": 65,
-    "SinRealtdsnobackground.png": 5
+    "SinRealtdsnobackground.png": 5,
+    "demon.png": 10 // Demon cash
 };
 
 // Tower stats
@@ -60,7 +63,8 @@ const ENEMY_HP_MODIFIER = {
     "LO_Marionette.png": 4,
     "ReaperAct2_refreshed.png": 3,
     "ExecutionerPlush.png": 4,
-    "SinRealtdsnobackground.png": 3
+    "SinRealtdsnobackground.png": 3,
+    "demon.png": 5 // Demon only appears after wave 5, but only via Reaper
 };
 
 // --- WAVE REWARD CONFIG ---
@@ -305,6 +309,10 @@ function update(time, delta) {
             }
             for (let j = 0; j < 5; j++) {
                 spawnEnemy.call(this, "GhostLunar.png");
+            }
+            // --- Reaper now also summons 2 demons at edges ---
+            for (let j = 0; j < 2; j++) {
+                spawnEnemyAtEdge.call(this, "demon.png");
             }
             timerObj.timer = 0;
         }
@@ -616,7 +624,7 @@ function update(time, delta) {
 
     // --- Executioner spawn logic for wave 5 ---
     if (currentWave === 4 && typeof window.wave5DeathCounter === 'number' && window.wave5ExecToSpawn > 0 && window.wave5ExecSpawned < window.wave5ExecToSpawn) {
-        if (window.wave5DeathCounter >= 20) {
+        if (window.wave5DeathCounter >= 25) { // Nerfed: now 25 deaths required
             // Spawn Executioner(s) at edge
             for (let i = 0; i < window.wave5ExecToSpawn; i++) {
                 spawnEnemyAtEdge.call(this, "ExecutionerPlush.png");
@@ -712,9 +720,11 @@ function startWave(waveNum) {
 function spawnEnemy(type) {
     // If no type provided, pick random (for legacy calls)
     if (!type) {
-        let filtered = ENEMY_ASSETS.filter(e => e !== "SinRealtdsnobackground.png");
+        let filtered = ENEMY_ASSETS.filter(e => e !== "SinRealtdsnobackground.png" && e !== "demon.png"); // Prevent demon from random spawn
         type = filtered[Phaser.Math.Between(0, filtered.length - 1)];
     }
+    // Prevent demon from spawning except via Reaper's summon
+    if (type === "demon.png" && !window.allowDemonSpawn) return null;
     let edge = Phaser.Math.Between(0, 3);
     let x, y;
     if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
@@ -743,6 +753,8 @@ function spawnEnemy(type) {
 
 // Helper to spawn enemy at random edge
 function spawnEnemyAtEdge(type) {
+    // Prevent demon from spawning except via Reaper's summon
+    if (type === "demon.png" && !window.allowDemonSpawn) return null;
     let edge = Phaser.Math.Between(0, 3);
     let x, y;
     if (edge === 0) { x = Phaser.Math.Between(0, WIDTH); y = 0; }
