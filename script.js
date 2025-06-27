@@ -937,6 +937,16 @@ function drawHealthBar() {
     // Border
     healthBar.lineStyle(2, 0xffffff, 1);
     healthBar.strokeRect(x, y, barWidth, barHeight);
+    // --- Base color transition: blue (full) to red (low) ---
+    if (ball && ball.setTint) {
+        let ratio = Math.max(0, Math.min(1, ballHealth / maxBallHealth));
+        // Blue (0x3399ff) to Red (0xff2222)
+        let r = Math.round(0x33 * ratio + 0xff * (1 - ratio));
+        let g = Math.round(0x99 * ratio + 0x22 * (1 - ratio));
+        let b = Math.round(0xff * ratio + 0x22 * (1 - ratio));
+        let tint = (r << 16) | (g << 8) | b;
+        ball.setTint(tint);
+    }
 }
 
 let waveTextObj = null;
