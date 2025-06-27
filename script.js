@@ -158,6 +158,12 @@ function preload() {
     TOWER_ASSETS.forEach(asset => this.load.image(asset, `Towers/${asset}`));
 }
 
+let gameStarted = false;
+let startScreenText = null;
+let preWaveBreakActive = false;
+let preWaveBreakTimer = 0;
+let preWaveBreakText = null;
+
 function create() {
     // Ball (objective) in the center
     ball = this.add.sprite(WIDTH / 2, HEIGHT / 2, "ball");
@@ -179,7 +185,7 @@ function create() {
 
     // Input for placing towers
     this.input.on('pointerdown', pointer => {
-        if (placingTower) {
+        if (placingTower && gameStarted) {
             placeTower.call(this, pointer.x, pointer.y);
         }
     });
@@ -191,6 +197,9 @@ function create() {
         }
         if (event.key.toLowerCase() === 't') {
             placingTower = !placingTower;
+        }
+        if (!gameStarted && event.code === 'Space') {
+            startGame.call(this);
         }
     });
 
@@ -223,7 +232,7 @@ function create() {
     });
     this.input.on('pointerup', pointer => {
         if (draggingTower && draggingTowerSprite) {
-            if (pointer.x > 100 && pointer.x < WIDTH && pointer.y > 0 && pointer.y < HEIGHT) {
+            if (pointer.x > 100 && pointer.x < WIDTH && pointer.y > 0 && pointer.y < HEIGHT && gameStarted) {
                 placeTower.call(this, pointer.x, pointer.y, draggingTower);
             }
             draggingTowerSprite.destroy();
@@ -248,6 +257,34 @@ function create() {
         if (hpModifierTooltip && hpModifierTooltip.destroy) hpModifierTooltip.destroy();
         hpModifierTooltip = null;
     });
+
+    // Show start screen
+    let intro = "The date is 31st October 2024.\nThe undead cult of guilt has risen, a twisted horde obsessed with wiping out the rest of humanity for their crimes in their twisted sense of justice.\nYou have to stop them before they go on a rampage.";
+    startScreenText = this.add.text(WIDTH / 2, HEIGHT / 2 - 40, intro + "\n\nPress space to start", {
+        fontSize: '20px',
+        fill: '#fff',
+        fontStyle: 'bold',
+        fontFamily: 'Arial',
+        align: 'center',
+        wordWrap: { width: WIDTH * 0.8, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0.5).setDepth(300);
+}
+
+function startGame() {
+    gameStarted = true;
+    if (startScreenText && startScreenText.destroy) startScreenText.destroy();
+    preWaveBreakActive = true;
+    preWaveBreakTimer = 0;
+    // Show purple text for 10s break
+    if (preWaveBreakText && preWaveBreakText.destroy) preWaveBreakText.destroy();
+    preWaveBreakText = this.add.text(WIDTH / 2, HEIGHT / 2, "I feel your forces commander...", {
+        fontSize: '28px',
+        fill: '#8844ff',
+        fontStyle: 'bold',
+        fontFamily: 'Arial',
+        align: 'center',
+        wordWrap: { width: WIDTH * 0.8, useAdvancedWrap: true }
+    }).setOrigin(0.5, 0.5).setDepth(400);
 }
 
 let waveTransitionTimer = 0;
@@ -258,6 +295,16 @@ let specialLongTransition = false;
 let phase2Text = null;
 
 function update(time, delta) {
+    if (!gameStarted) return;
+    if (preWaveBreakActive) {
+        preWaveBreakTimer += delta || 16;
+        if (preWaveBreakTimer > 10000) {
+            preWaveBreakActive = false;
+            if (preWaveBreakText && preWaveBreakText.destroy) { preWaveBreakText.destroy(); preWaveBreakText = null; }
+        } else {
+            return; // Don't start waves yet
+        }
+    }
     // --- Wave Spawning ---
     if (!waveInProgress && currentWave < WAVES.length && !waveTransitionActive) {
         startWave.call(this, currentWave);
@@ -267,34 +314,33 @@ function update(time, delta) {
         waveTransitionTimer += delta || 16;
         let transitionDuration = 10000; // 10 seconds between waves
         // --- Show different interval text and color for each transition ---
-        let intervalText = 'You should repent commander.The cult deems you guilty of your sins.';
+        let intervalText = 'You should repent commander. The cult deems you guilty of your sins.';
         let intervalColor = '#8844ff'; // purple by default
-        let intervalFontSize = '2px';
+        // Format interval text to fit on screen: new line for each sentence
         if (currentWave === 1) {
-            intervalText = 'You should repent commander. The cult deems you GUILTY of your sins.';
+            intervalText = 'You should repent commander.\nThe cult deems you GUILTY of your sins.';
             intervalColor = '#8844ff';
         } 
         else if (currentWave === 2) {
-            intervalText = 'Stop resisting and accept your punishment. It is HIS will';
+            intervalText = 'Stop resisting and accept your punishment.\nIt is HIS will';
             intervalColor = '#a000c8'; // purple-red blend
-
         } else if (currentWave === 3) {
-            intervalText = "You are really are stubborn aren't you. Guess I'll have to kill you myself.";
+            intervalText = "You are really are stubborn aren't you.\nGuess I'll have to kill you myself.";
             intervalColor = '#c00044'; // more red
-
         } else if (currentWave === 4) {
-            intervalText = "Puny mortal, for your crimes, thy Punishment is DEATH";
+            intervalText = "Puny mortal, for your crimes,\nthy Punishment is DEATH";
             intervalColor = '#ff0000'; // pure red
         } else {
             intervalText = '';
         }
         if (!this.customIntervalText && intervalText) {
             this.customIntervalText = this.add.text(WIDTH / 2, HEIGHT / 2, intervalText, {
-                fontSize: '28px',
+                fontSize: '24px', // Slightly smaller for better fit
                 fill: intervalColor,
                 fontStyle: 'bold',
                 fontFamily: 'Arial',
-                align: 'center'
+                align: 'center',
+                wordWrap: { width: WIDTH * 0.8, useAdvancedWrap: true }
             }).setOrigin(0.5, 0.5).setDepth(200);
         }
         if (waveTransitionTimer > transitionDuration) {
@@ -336,14 +382,42 @@ function update(time, delta) {
             delete reaperSummonTimers[reaperId]; // Remove timer if reaper is dead
             continue;
         }
-        if (timerObj.timer > 2000) { // 1 per 2 seconds
+        // --- Reaper ability pause/overheal logic ---
+        if (!reaper.abilityPause) reaper.abilityPause = 0;
+        if (reaper.abilityPause > 0) {
+            reaper.abilityPause -= delta || 16;
+            if (!reaper.abilityCircle) {
+                reaper.abilityCircle = reaper.scene.add.graphics();
+                reaper.abilityCircle.lineStyle(4, 0xff2222, 1);
+                reaper.abilityCircle.strokeCircle(reaper.x, reaper.y, 36);
+                reaper.abilityCircle.setDepth(99);
+            } else {
+                reaper.abilityCircle.clear();
+                reaper.abilityCircle.lineStyle(4, 0xff2222, 1);
+                reaper.abilityCircle.strokeCircle(reaper.x, reaper.y, 36);
+            }
+            // Prevent movement
+            reaper.canMove = false;
+            if (reaper.abilityPause <= 0 || !reaper.active) {
+                reaper.canMove = true;
+                if (reaper.abilityCircle) { reaper.abilityCircle.clear(); reaper.abilityCircle.destroy(); reaper.abilityCircle = null; }
+            }
+        } else if (reaper.abilityCircle) {
+            reaper.abilityCircle.clear();
+            reaper.abilityCircle.destroy();
+            reaper.abilityCircle = null;
+        }
+        if (timerObj.timer > 2000 && (!reaper.abilityPause || reaper.abilityPause <= 0)) { // 1 per 2 seconds
+            // --- Ability triggers ---
+            // Pause reaper for 1s and overheal
+            reaper.abilityPause = 1000;
+            reaper.enemyHealth += 10;
             for (let j = 0; j < 3; j++) {
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
             for (let j = 0; j < 5; j++) {
                 spawnEnemy.call(this, "GhostLunar.png");
             }
-            // --- Reaper now also summons 2 demons at edges ---
             window.allowDemonSpawn = true;
             for (let j = 0; j < 2; j++) {
                 spawnEnemyAtEdge.call(this, "demon.png");
@@ -537,10 +611,14 @@ function update(time, delta) {
     // --- Move enemies toward the ball (fix: use correct reference for ball position) ---
     enemies.getChildren().forEach(enemy => {
         if (!ball || !enemy) return;
+        // --- Reaper movement pause logic ---
+        if (enemy.texture.key === "ReaperAct2_refreshed.png" && enemy.abilityPause > 0) {
+            return; // Don't move while paused
+        }
         let dx = ball.x - enemy.x;
         let dy = ball.y - enemy.y;
         let dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 2) {
+        if (dist > 2 && (enemy.canMove === undefined || enemy.canMove)) {
             let moveX = (dx / dist) * enemy.enemySpeed;
             let moveY = (dy / dist) * enemy.enemySpeed;
             enemy.x += moveX;
@@ -644,7 +722,6 @@ function update(time, delta) {
                     fontSize: '32px', fill: '#fff', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
                 }).setOrigin(0.5, 0.5).setDepth(100);
                 if (punishmentText && punishmentText.destroy) { punishmentText.destroy(); punishmentText = null; }
-                punishmentText = null;
                 waveTransitionActive = true;
                 waveTransitionTimer = 0;
                 specialLongTransition = true;
@@ -743,13 +820,8 @@ function startWave(waveNum) {
     // Show fun message for final wave
     if (waveNum === WAVES.length - 1) {
         if (this.finalWaveText && this.finalWaveText.destroy) this.finalWaveText.destroy();
-        this.finalWaveText = this.add.text(WIDTH / 2, 40, 'YOU SHALL DIE HERETIC!!!', {
-            fontSize: '32px',
-            fill: '#ff0000',
-            fontStyle: 'bold',
-            fontFamily: 'Arial',
-            align: 'center'
-        }).setOrigin(0.5, 0).setDepth(100);
+        // Remove the 'YOU SHALL DIE HERETIC!!!' line
+        // this.finalWaveText = this.add.text(WIDTH / 2, 40, 'YOU SHALL DIE HERETIC!!!', { ... });
     } else if (this.finalWaveText && this.finalWaveText.destroy) {
         this.finalWaveText.destroy();
         this.finalWaveText = null;
@@ -968,5 +1040,21 @@ towers.getChildren().forEach(tower => {
     }
     // Check if tower was destroyed this frame (by enemy or mechanic)
     if (!tower.scene) return; // Already destroyed
+    // Flash red before destroy
+    if (!tower._flashing) {
+        tower._flashing = true;
+        tower.setTint(0xff2222);
+        tower.scene.tweens.add({
+            targets: tower,
+            alpha: 0.2,
+            yoyo: true,
+            repeat: 2,
+            duration: 80,
+            onComplete: () => {
+                tower.clearTint();
+                tower.destroy();
+            }
+        });
+    }
 });
 towersToRemove.forEach(tower => { tower._pendingDestroy = true; tower.destroy(); });
