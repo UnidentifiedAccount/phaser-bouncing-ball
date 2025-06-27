@@ -269,7 +269,7 @@ function update(time, delta) {
         // --- Show different interval text and color for each transition ---
         let intervalText = 'You should repent commander.The cult deems you guilty of your sins.';
         let intervalColor = '#8844ff'; // purple by default
-        let intervalFontSize = '7px';
+        let intervalFontSize = '2px';
         if (currentWave === 1) {
             intervalText = 'You should repent commander. The cult deems you GUILTY of your sins.';
             intervalColor = '#8844ff';
@@ -643,9 +643,8 @@ function update(time, delta) {
                 waveCompleteText = this.add.text(WIDTH / 2, HEIGHT / 2 - 40, `Wave ${currentWave} Complete!`, {
                     fontSize: '32px', fill: '#fff', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
                 }).setOrigin(0.5, 0.5).setDepth(100);
-                punishmentText = this.add.text(WIDTH / 2, HEIGHT / 2 + 10, 'YOU WILL FACE YOUR PUNISHMENT HERETIC', {
-                    fontSize: '14px', fill: '#ff2222', fontStyle: 'bold', fontFamily: 'Arial', align: 'center'
-                }).setOrigin(0.5, 0.5).setDepth(101);
+                if (punishmentText && punishmentText.destroy) { punishmentText.destroy(); punishmentText = null; }
+                punishmentText = null;
                 waveTransitionActive = true;
                 waveTransitionTimer = 0;
                 specialLongTransition = true;
