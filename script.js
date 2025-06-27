@@ -23,7 +23,7 @@ const TOWER_ASSETS = [
 const ENEMY_STATS = {
     "CitizenPlush.png":    { speed: 1.0, health: 4 },
     "CobaltGuardLunar.png":{ speed: 0.8, health: 50 },
-    "ExecutionerPlush.png":{ speed: 0.3, health: 300 },
+    "ExecutionerPlush.png":{ speed: 0.25, health: 300 },
     "GhostLunar.png":      { speed: 1.2, health: 5 },
     "KnightLunar.png":     { speed: 2, health: 10 },
     "LO_Marionette.png":   { speed: 1.3, health: 20},
@@ -42,7 +42,7 @@ const ENEMY_CASH = {
     "LO_Marionette.png": 50,
     "ReaperAct2_refreshed.png": 65,
     "SinRealtdsnobackground.png": 5,
-    "demon.png": 10 // Demon cash
+    "demon.png": 20 // Demon cash
 };
 
 // Tower stats
@@ -536,7 +536,7 @@ function update(time, delta) {
                 enemy.x = newX;
                 enemy.y = newY;
                 enemy.enemyHealth = 200;
-                enemy.enemySpeed = 0.6;
+                enemy.enemySpeed = 0.5; // Correct phase 2 speed
                 // Remove phase2 indicator if it exists
                 if (enemy.phase2Text && enemy.phase2Text.destroy) { enemy.phase2Text.destroy(); enemy.phase2Text = null; }
                 // Make Executioner glow red in phase 2
