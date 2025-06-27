@@ -36,8 +36,8 @@ const ENEMY_STATS = {
 const ENEMY_CASH = {
     "CitizenPlush.png": 15,
     "CobaltGuardLunar.png": 60,
-    "ExecutionerPlush.png": -1000,
-    "GhostLunar.png": 20,
+    "ExecutionerPlush.png": -1080,
+    "GhostLunar.png": 25,
     "KnightLunar.png": 40,
     "LO_Marionette.png": 50,
     "ReaperAct2_refreshed.png": 90,
@@ -185,19 +185,19 @@ function create() {
 
     // Input for placing towers
     this.input.on('pointerdown', pointer => {
-        // Remove placingTower check: only allow drag-and-drop or sidebar click
-        // (No action needed here for drag-and-drop, handled by sidebar icon logic)
+        if (placingTower && gameStarted) {
+            placeTower.call(this, pointer.x, pointer.y);
+        }
     });
 
-    // Keyboard: 1-4 to select tower, T to toggle placement mode (T key logic now ignored)
+    // Keyboard: 1-4 to select tower, T to toggle placement mode
     this.input.keyboard.on('keydown', event => {
         if (event.key >= '1' && event.key <= String(TOWER_ASSETS.length)) {
             selectedTowerIndex = parseInt(event.key) - 1;
         }
-        // Remove T key logic
-        // if (event.key.toLowerCase() === 't') {
-        //     placingTower = !placingTower;
-        // }
+        if (event.key.toLowerCase() === 't') {
+            placingTower = !placingTower;
+        }
         if (!gameStarted && event.code === 'Space') {
             startGame.call(this);
         }
@@ -231,13 +231,10 @@ function create() {
         }
     });
     this.input.on('pointerup', pointer => {
-        // Allow placing tower if draggingTower is set and gameStarted, and pointer is on the map (not sidebar)
         if (draggingTower && draggingTowerSprite) {
-            // Only allow placement if pointer is inside the main game area (not sidebar)
             if (pointer.x > 100 && pointer.x < WIDTH && pointer.y > 0 && pointer.y < HEIGHT && gameStarted) {
                 placeTower.call(this, pointer.x, pointer.y, draggingTower);
             }
-            // Always clean up the drag sprite, even if not placed
             draggingTowerSprite.destroy();
             draggingTower = null;
             draggingTowerSprite = null;
@@ -851,42 +848,6 @@ function startWave(waveNum) {
     }
 }
 
-let waveTextObj = null;
-let moneyTextObj = null;
-let sidebarTextObjs = [];
-
-function drawSidebar() {
-    sidebarGraphics.clear();
-    sidebarGraphics.fillStyle(0x222244, 1);
-    sidebarGraphics.fillRect(0, 0, 100, HEIGHT);
-    // Remove previous text objects if they exist
-    if (waveTextObj && waveTextObj.destroy) { waveTextObj.destroy(); waveTextObj = null; }
-    if (moneyTextObj && moneyTextObj.destroy) { moneyTextObj.destroy(); moneyTextObj = null; }
-    if (sidebarTextObjs && Array.isArray(sidebarTextObjs)) {
-        sidebarTextObjs.forEach(obj => { if (obj && obj.destroy) obj.destroy(); });
-        sidebarTextObjs = [];
-    }
-    // --- Wave indicator removed as requested ---
-    // Cash indicator
-    moneyTextObj = this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
-    sidebarTextObjs.push(moneyTextObj);
-    let towersLabel = this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
-    sidebarTextObjs.push(towersLabel);
-    TOWER_ASSETS.forEach((asset, i) => {
-        let stats = TOWER_STATS[asset];
-        let y = 90 + i * 90; // Match iconY for alignment
-        let t1 = this.add.text(70, y - 20, `R:${stats.range}`, { fontSize: '12px', fill: '#fff' });
-        let t2 = this.add.text(70, y - 5, `D:${stats.damage}`, { fontSize: '12px', fill: '#fff' });
-        let t3 = this.add.text(70, y + 10, `F:${stats.firerate}`, { fontSize: '12px', fill: '#fff' });
-        let t4 = this.add.text(70, y + 25, `$${stats.cost}`, { fontSize: '12px', fill: '#ff0' });
-        sidebarTextObjs.push(t1, t2, t3, t4);
-        if (stats.isCommander) {
-            let t5 = this.add.text(10, y + 35, 'Commander: Reduces firerate of towers in range', { fontSize: '10px', fill: '#0ff' });
-            sidebarTextObjs.push(t5);
-        }
-    });
-}
-
 // --- Helper to spawn a Reaper at a specific position ---
 function spawnReaperAtPosition(x, y) {
     let type = "ReaperAct2_refreshed.png";
@@ -962,10 +923,10 @@ function spawnEnemyAtEdge(type) {
 
 function drawHealthBar() {
     healthBar.clear();
-    let barWidth = 60;
-    let barHeight = 8;
+    let barWidth = 60; // 50% of previous 120
+    let barHeight = 8; // 50% of previous 16
     let x = WIDTH / 2 - barWidth / 2;
-    let y = HEIGHT / 2 - (ballSize * 0.5) / 2 - 15;
+    let y = HEIGHT / 2 - (ballSize * 0.5) / 2 - 15; // Adjust for smaller base
     // Background
     healthBar.fillStyle(0x222222, 1);
     healthBar.fillRect(x, y, barWidth, barHeight);
@@ -976,9 +937,172 @@ function drawHealthBar() {
     // Border
     healthBar.lineStyle(2, 0xffffff, 1);
     healthBar.strokeRect(x, y, barWidth, barHeight);
-    // Restore base sprite to default (no tint, no alpha changes)
-    if (ball && ball.clearTint) {
-        ball.clearTint();
-        ball.setAlpha(1);
+    // --- Base color transition: blue (full) to red (low) ---
+    if (ball && ball.setTint) {
+        let ratio = Math.max(0, Math.min(1, ballHealth / maxBallHealth));
+        // Blue (0x3399ff) to Red (0xff2222)
+        let r = Math.round(0x33 * ratio + 0xff * (1 - ratio));
+        let g = Math.round(0x99 * ratio + 0x22 * (1 - ratio));
+        let b = Math.round(0xff * ratio + 0x22 * (1 - ratio));
+        let tint = (r << 16) | (g << 8) | b;
+        ball.setTint(tint);
     }
 }
+
+let waveTextObj = null;
+let moneyTextObj = null;
+
+function drawSidebar() {
+    sidebarGraphics.clear();
+    sidebarGraphics.fillStyle(0x222244, 1);
+    sidebarGraphics.fillRect(0, 0, 100, HEIGHT);
+    // Remove previous text objects if they exist
+    if (waveTextObj && waveTextObj.destroy) { waveTextObj.destroy(); waveTextObj = null; }
+    if (moneyTextObj && moneyTextObj.destroy) { moneyTextObj.destroy(); moneyTextObj = null; }
+    // --- Wave indicator removed as requested ---
+    // Cash indicator
+    moneyTextObj = this.add.text(10, 32, `Cash: $${playerMoney}`, { fontSize: '16px', fill: '#0f0' });
+    this.add.text(10, 54, 'Towers', { fontSize: '16px', fill: '#fff' });
+    TOWER_ASSETS.forEach((asset, i) => {
+        let stats = TOWER_STATS[asset];
+        let y = 90 + i * 90; // Match iconY for alignment
+        this.add.text(70, y - 20, `R:${stats.range}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y - 5, `D:${stats.damage}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y + 10, `F:${stats.firerate}`, { fontSize: '12px', fill: '#fff' });
+        this.add.text(70, y + 25, `$${stats.cost}`, { fontSize: '12px', fill: '#ff0' });
+        if (stats.isCommander) {
+            this.add.text(10, y + 35, 'Commander: Reduces firerate of towers in range', { fontSize: '10px', fill: '#0ff' });
+        }
+    });
+}
+
+function placeTower(x, y, asset) {
+    // Prevent placing on the ball or sidebar
+    let dx = x - ball.x;
+    let dy = y - ball.y;
+    if (Math.sqrt(dx * dx + dy * dy) < ballSize || x < 100) return;
+    let stats = TOWER_STATS[asset];
+    if (playerMoney < stats.cost) return;
+    let tower = this.add.sprite(x, y, asset);
+    tower.setDisplaySize(48, 48);
+    tower.towerType = asset;
+    tower.range = stats.range;
+    tower.damage = stats.damage;
+    tower.firerate = stats.firerate;
+    tower.isCommander = !!stats.isCommander;
+    tower.lastShot = 0;
+    tower.towerCost = stats.cost; // Track cost for refund
+    towers.add(tower);
+    playerMoney -= stats.cost;
+    drawSidebar.call(this);
+}
+
+function fireBullet(tower, target) {
+    let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
+    let speed = 6;
+    if (tower.towerType === "Shotgun.png") {
+        // Shotgun: 3 piercing bullets in a spread
+        for (let i = -1; i <= 1; i++) {
+            let spread = angle + i * 0.18; // ~10 degrees
+            let bullet = {
+                x: tower.x,
+                y: tower.y,
+                vx: Math.cos(spread) * speed,
+                vy: Math.sin(spread) * speed,
+                lifetime: 20,
+                damage: tower.damage,
+                piercing: true,
+                piercedEnemies: new Set()
+            };
+            bullets.push(bullet);
+        }
+    } else {
+        let bullet = {
+            x: tower.x,
+            y: tower.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            lifetime: 60,
+            damage: tower.damage
+        };
+        bullets.push(bullet);
+    }
+}
+
+function renderBullets(graphics) {
+    bullets.getChildren().forEach(bullet => {
+        graphics.fillStyle(0xffff00, 1);
+        graphics.fillCircle(bullet.x, bullet.y, 4);
+    });
+}
+
+function gameOver() {
+    this.add.text(WIDTH / 2 - 80, HEIGHT / 2, "Game Over!", { fontSize: '32px', fill: '#ff0000' });
+    this.scene.pause();
+}
+
+// --- Bullet Logic ---
+bulletGraphics.clear();
+for (let i = bullets.length - 1; i >= 0; i--) {
+    let bullet = bullets[i];
+    bullet.x += bullet.vx;
+    bullet.y += bullet.vy;
+    bullet.lifetime--;
+    bulletGraphics.fillStyle(0xffff00, 1);
+    bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+    if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
+        bullets.splice(i, 1);
+        continue;
+    }
+    enemies.getChildren().forEach(enemy => {
+        if (!enemy.active) return;
+        let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+        if (d < 24) {
+            if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
+            if (bullet.piercedEnemies.has(enemy)) return;
+            bullet.piercedEnemies.add(enemy);
+            enemy.enemyHealth -= bullet.damage;
+            if (!bullet.piercing) bullets.splice(i, 1);
+            if (enemy.enemyHealth <= 0) {
+                let cash = ENEMY_CASH[enemy.texture.key] || 0;
+                // --- Wave 5 death counter for Executioner spawn ---
+                if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
+                    window.wave5DeathCounter++;
+                }
+                enemy.destroy();
+                playerMoney += cash;
+                sidebarNeedsUpdate = true;
+            }
+        }
+    });
+}
+// --- Tower special death logic (Minigunner second chance) ---
+// This must be after all destroy() calls for towers in the frame
+// Remove Minigunner second chance logic: all towers die normally
+let towersToRemove = [];
+towers.getChildren().forEach(tower => {
+    if (!tower.active) return;
+    if (tower._pendingDestroy) {
+        // Already handled
+        return;
+    }
+    // Check if tower was destroyed this frame (by enemy or mechanic)
+    if (!tower.scene) return; // Already destroyed
+    // Flash red before destroy
+    if (!tower._flashing) {
+        tower._flashing = true;
+        tower.setTint(0xff2222);
+        tower.scene.tweens.add({
+            targets: tower,
+            alpha: 0.2,
+            yoyo: true,
+            repeat: 2,
+            duration: 80,
+            onComplete: () => {
+                tower.clearTint();
+                tower.destroy();
+            }
+        });
+    }
+});
+towersToRemove.forEach(tower => { tower._pendingDestroy = true; tower.destroy(); });
