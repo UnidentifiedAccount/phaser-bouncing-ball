@@ -28,8 +28,8 @@ const ENEMY_STATS = {
     "KnightLunar.png":     { speed: 2, health: 10 },
     "LO_Marionette.png":   { speed: 1.3, health: 20},
     "ReaperAct2_refreshed.png": { speed: 0.6, health: 60 },
-    "SinRealtdsnobackground.png": { speed: 1.5, health: 1 },
-    "demon.png":           { speed: 0.5, health: 100 } // Demon stats
+    "SinRealtdsnobackground.png": { speed: 1.5, health: 2 },
+    "demon.png":           { speed: 0.5, health: 70 } // Demon stats
 };
 
 // Cash rewards per enemy type
@@ -40,9 +40,9 @@ const ENEMY_CASH = {
     "GhostLunar.png": 25,
     "KnightLunar.png": 40,
     "LO_Marionette.png": 50,
-    "ReaperAct2_refreshed.png": 65,
-    "SinRealtdsnobackground.png": 5,
-    "demon.png": 20 // Demon cash
+    "ReaperAct2_refreshed.png": 90,
+    "SinRealtdsnobackground.png": 0,
+    "demon.png": 0 // Demon cash
 };
 
 // Tower stats
@@ -379,39 +379,47 @@ function update(time, delta) {
         // Find if the specific reaper for this timer is still alive
         let reaper = enemies.getChildren().find(enemy => enemy.texture.key === "ReaperAct2_refreshed.png" && enemy.id == reaperId && enemy.active);
         if (!reaper) {
+            // Remove green glow if reaper dies
+            if (timerObj._wasGlowing && timerObj._glowTarget && timerObj._glowTarget.clearTint) {
+                timerObj._glowTarget.clearTint();
+                timerObj._wasGlowing = false;
+                timerObj._glowTarget = null;
+            }
             delete reaperSummonTimers[reaperId]; // Remove timer if reaper is dead
             continue;
         }
         // --- Reaper ability pause/overheal logic ---
         if (!reaper.abilityPause) reaper.abilityPause = 0;
         if (reaper.abilityPause > 0) {
-            reaper.abilityPause -= delta || 16;
-            if (!reaper.abilityCircle) {
-                reaper.abilityCircle = reaper.scene.add.graphics();
-                reaper.abilityCircle.lineStyle(4, 0xff2222, 1);
-                reaper.abilityCircle.strokeCircle(reaper.x, reaper.y, 36);
-                reaper.abilityCircle.setDepth(99);
-            } else {
-                reaper.abilityCircle.clear();
-                reaper.abilityCircle.lineStyle(4, 0xff2222, 1);
-                reaper.abilityCircle.strokeCircle(reaper.x, reaper.y, 36);
+            // Green glow for ability duration
+            if (!timerObj._wasGlowing) {
+                reaper.setTint(0x00ff44);
+                timerObj._wasGlowing = true;
+                timerObj._glowTarget = reaper;
             }
             // Prevent movement
             reaper.canMove = false;
             if (reaper.abilityPause <= 0 || !reaper.active) {
                 reaper.canMove = true;
-                if (reaper.abilityCircle) { reaper.abilityCircle.clear(); reaper.abilityCircle.destroy(); reaper.abilityCircle = null; }
+                if (timerObj._wasGlowing && timerObj._glowTarget && timerObj._glowTarget.clearTint) {
+                    timerObj._glowTarget.clearTint();
+                    timerObj._wasGlowing = false;
+                    timerObj._glowTarget = null;
+                }
             }
-        } else if (reaper.abilityCircle) {
-            reaper.abilityCircle.clear();
-            reaper.abilityCircle.destroy();
-            reaper.abilityCircle = null;
+        } else {
+            // Remove green glow if not paused
+            if (timerObj._wasGlowing && timerObj._glowTarget && timerObj._glowTarget.clearTint) {
+                timerObj._glowTarget.clearTint();
+                timerObj._wasGlowing = false;
+                timerObj._glowTarget = null;
+            }
         }
         if (timerObj.timer > 2000 && (!reaper.abilityPause || reaper.abilityPause <= 0)) { // 1 per 2 seconds
             // --- Ability triggers ---
             // Pause reaper for 1s and overheal
             reaper.abilityPause = 1000;
-            reaper.enemyHealth += 10;
+            reaper.enemyHealth += 5; // Nerfed from 10 to 5
             for (let j = 0; j < 3; j++) {
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
@@ -634,6 +642,8 @@ function update(time, delta) {
                 for (let i = 0; i < 10; i++) {
                     spawnEnemyAtEdge.call(this, "KnightLunar.png");
                 }
+                // --- Spawn a Reaper at Executioner's old position before teleporting ---
+                spawnReaperAtPosition.call(this, enemy.x, enemy.y);
                 spawnEnemyAtEdge.call(this, "ReaperAct2_refreshed.png");
                 enemy.hasSummonedPhase2 = true;
                 enemy.phase2 = true;
@@ -826,6 +836,24 @@ function startWave(waveNum) {
         this.finalWaveText.destroy();
         this.finalWaveText = null;
     }
+}
+
+// --- Helper to spawn a Reaper at a specific position ---
+function spawnReaperAtPosition(x, y) {
+    let type = "ReaperAct2_refreshed.png";
+    let stats = ENEMY_STATS[type];
+    let enemy = this.add.sprite(x, y, type);
+    enemy.setDisplaySize(48, 48);
+    enemy.setDepth(2);
+    // --- Apply HP modifier ---
+    let firstWave = ENEMY_HP_MODIFIER[type] ?? 0;
+    let bonusWaves = typeof currentWave === 'number' ? Math.max(0, currentWave - firstWave) : 0;
+    let bonusHp = Math.ceil(stats.health * 0.13 * bonusWaves); // 13% per wave
+    enemy.enemySpeed = stats.speed;
+    enemy.enemyHealth = stats.health + bonusHp;
+    enemy.id = window.REAPER_ID_COUNTER++;
+    enemies.add(enemy);
+    return enemy;
 }
 
 function spawnEnemy(type) {
