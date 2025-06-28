@@ -16,7 +16,8 @@ const TOWER_ASSETS = [
     "Commander.png",
     "Minigunner.png",
     "Scout.png",
-    "Shotgun.png"
+    "Shotgun.png",
+    "rocketeer.png" // New tower asset
 ];
 
 // Assign stats for each enemy asset
@@ -47,10 +48,11 @@ const ENEMY_CASH = {
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 150, damage: 4, firerate: 12, cost: 110, isCommander: true },
+    "Commander.png":   { range: 150, damage: 4, firerate: 15, cost: 110, isCommander: true },
     "Minigunner.png":  { range: 120, damage: 2, firerate: 0.5, cost: 130 },
     "Scout.png":       { range: 80,  damage: 5, firerate: 9, cost: 25 },
     "Shotgun.png":     { range: 60,  damage: 3, firerate: 6, cost:  45},
+    "rocketeer.png":   { range: 180, damage:10, firerate: 45, cost: 120, aoe: 20, missiles: 4 } // New tower stats
 };
 
 // --- HP MODIFIER CONFIG ---
@@ -589,33 +591,48 @@ function update(time, delta) {
         bullet.x += bullet.vx;
         bullet.y += bullet.vy;
         bullet.lifetime--;
-        bulletGraphics.fillStyle(0xffff00, 1);
-        bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+        if (bullet.missile) {
+            bulletGraphics.fillStyle(0xff8800, 1);
+            bulletGraphics.fillCircle(bullet.x, bullet.y, 6);
+        } else {
+            bulletGraphics.fillStyle(0xffff00, 1);
+            bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+        }
         if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
             bullets.splice(i, 1);
             continue;
         }
-        enemies.getChildren().forEach(enemy => {
-            if (!enemy.active) return;
-            let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
-            if (d < 24) {
-                if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
-                if (bullet.piercedEnemies.has(enemy)) return;
-                bullet.piercedEnemies.add(enemy);
-                enemy.enemyHealth -= bullet.damage;
-                if (!bullet.piercing) bullets.splice(i, 1);
-                if (enemy.enemyHealth <= 0) {
-                    let cash = ENEMY_CASH[enemy.texture.key] || 0;
-                    // --- Wave 5 death counter for Executioner spawn ---
-                    if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
-                        window.wave5DeathCounter++;
+        if (bullet.missile && bullet.aoe) {
+            // Missile: explode on proximity to target
+            let d = Math.sqrt((bullet.x - bullet.target.x) ** 2 + (bullet.y - bullet.target.y) ** 2);
+            if (d < 12) {
+                // Draw explosion
+                bulletGraphics.fillStyle(0xff2200, 0.5);
+                bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
+                // Damage all enemies in radius
+                enemies.getChildren().forEach(enemy => {
+                    if (!enemy.active) return;
+                    let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                    if (dist < bullet.aoe) {
+                        enemy.enemyHealth -= bullet.damage;
                     }
-                    enemy.destroy();
-                    playerMoney += cash;
-                    sidebarNeedsUpdate = true;
-                }
+                });
+                bullets.splice(i, 1);
+                continue;
             }
-        });
+        } else {
+            enemies.getChildren().forEach(enemy => {
+                if (!enemy.active) return;
+                let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                if (d < 24) {
+                    if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
+                    if (bullet.piercedEnemies.has(enemy)) return;
+                    bullet.piercedEnemies.add(enemy);
+                    enemy.enemyHealth -= bullet.damage;
+                    if (!bullet.piercing) bullets.splice(i, 1);
+                }
+            });
+        }
     }
     // Only update sidebar once per frame if needed
     if (sidebarNeedsUpdate) drawSidebar.call(this);
@@ -998,35 +1015,47 @@ function placeTower(x, y, asset) {
 }
 
 function fireBullet(tower, target) {
-    let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
-    let speed = 6;
-    if (tower.towerType === "Shotgun.png") {
-        // Shotgun: 3 piercing bullets in a spread
-        for (let i = -1; i <= 1; i++) {
-            let spread = angle + i * 0.18; // ~10 degrees
-            let bullet = {
+    if (tower.texture && tower.texture.key === "rocketeer.png") {
+        // Fire 4 missiles at up to 4 different enemies in range
+        let enemiesInRange = enemies.getChildren().filter(e => {
+            if (!e.active) return false;
+            let d = Math.sqrt((tower.x - e.x) ** 2 + (tower.y - e.y) ** 2);
+            return d < tower.range;
+        });
+        Phaser.Utils.Array.Shuffle(enemiesInRange);
+        let targets = enemiesInRange.slice(0, 4);
+        targets.forEach(missileTarget => {
+            let angle = Math.atan2(missileTarget.y - tower.y, missileTarget.x - tower.x);
+            let speed = 7;
+            let vx = Math.cos(angle) * speed;
+            let vy = Math.sin(angle) * speed;
+            bullets.push({
                 x: tower.x,
                 y: tower.y,
-                vx: Math.cos(spread) * speed,
-                vy: Math.sin(spread) * speed,
-                lifetime: 20,
+                vx,
+                vy,
+                lifetime: 90,
                 damage: tower.damage,
-                piercing: true,
-                piercedEnemies: new Set()
-            };
-            bullets.push(bullet);
-        }
-    } else {
-        let bullet = {
-            x: tower.x,
-            y: tower.y,
-            vx: Math.cos(angle) * speed,
-            vy: Math.sin(angle) * speed,
-            lifetime: 60,
-            damage: tower.damage
-        };
-        bullets.push(bullet);
+                aoe: TOWER_STATS["rocketeer.png"].aoe,
+                missile: true,
+                target: missileTarget
+            });
+        });
+        return;
     }
+    // Default: single bullet
+    let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
+    let speed = 10;
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+    bullets.push({
+        x: tower.x,
+        y: tower.y,
+        vx,
+        vy,
+        lifetime: 60,
+        damage: tower.damage
+    });
 }
 
 function renderBullets(graphics) {
@@ -1048,33 +1077,48 @@ for (let i = bullets.length - 1; i >= 0; i--) {
     bullet.x += bullet.vx;
     bullet.y += bullet.vy;
     bullet.lifetime--;
-    bulletGraphics.fillStyle(0xffff00, 1);
-    bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+    if (bullet.missile) {
+        bulletGraphics.fillStyle(0xff8800, 1);
+        bulletGraphics.fillCircle(bullet.x, bullet.y, 6);
+    } else {
+        bulletGraphics.fillStyle(0xffff00, 1);
+        bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
+    }
     if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
         bullets.splice(i, 1);
         continue;
     }
-    enemies.getChildren().forEach(enemy => {
-        if (!enemy.active) return;
-        let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
-        if (d < 24) {
-            if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
-            if (bullet.piercedEnemies.has(enemy)) return;
-            bullet.piercedEnemies.add(enemy);
-            enemy.enemyHealth -= bullet.damage;
-            if (!bullet.piercing) bullets.splice(i, 1);
-            if (enemy.enemyHealth <= 0) {
-                let cash = ENEMY_CASH[enemy.texture.key] || 0;
-                // --- Wave 5 death counter for Executioner spawn ---
-                if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
-                    window.wave5DeathCounter++;
+    if (bullet.missile && bullet.aoe) {
+        // Missile: explode on proximity to target
+        let d = Math.sqrt((bullet.x - bullet.target.x) ** 2 + (bullet.y - bullet.target.y) ** 2);
+        if (d < 12) {
+            // Draw explosion
+            bulletGraphics.fillStyle(0xff2200, 0.5);
+            bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
+            // Damage all enemies in radius
+            enemies.getChildren().forEach(enemy => {
+                if (!enemy.active) return;
+                let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                if (dist < bullet.aoe) {
+                    enemy.enemyHealth -= bullet.damage;
                 }
-                enemy.destroy();
-                playerMoney += cash;
-                sidebarNeedsUpdate = true;
-            }
+            });
+            bullets.splice(i, 1);
+            continue;
         }
-    });
+    } else {
+        enemies.getChildren().forEach(enemy => {
+            if (!enemy.active) return;
+            let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+            if (d < 24) {
+                if (!bullet.piercedEnemies) bullet.piercedEnemies = new Set();
+                if (bullet.piercedEnemies.has(enemy)) return;
+                bullet.piercedEnemies.add(enemy);
+                enemy.enemyHealth -= bullet.damage;
+                if (!bullet.piercing) bullets.splice(i, 1);
+            }
+        });
+    }
 }
 // --- Tower special death logic (Minigunner second chance) ---
 // This must be after all destroy() calls for towers in the frame
