@@ -51,8 +51,8 @@ const TOWER_STATS = {
     "Commander.png":   { range: 150, damage: 4, firerate: 12, cost: 110, isCommander: true },
     "Minigunner.png":  { range: 120, damage: 2, firerate: 0.5, cost: 130 },
     "Scout.png":       { range: 80,  damage: 5, firerate: 9, cost: 25 },
-    "Shotgun.png":     { range: 60,  damage: 4.5, firerate: 6, cost:  35},
-    "rocket.png":      { range: 150, damage: 20, firerate: 100, cost: 120, aoe: 100, missiles: 4 } // Rocketeer
+    "Shotgun.png":     { range: 60,  damage: 4.5, firerate: 7, cost:  35},
+    "rocket.png":      { range: 150, damage: 15, firerate: 100, cost: 120, aoe: 100, missiles: 4 } // Rocketeer
 };
 
 // --- HP MODIFIER CONFIG ---
@@ -724,7 +724,7 @@ function update(time, delta) {
                 if (edge === 3) { newX = 0; newY = Phaser.Math.Between(0, HEIGHT); }
                 enemy.x = newX;
                 enemy.y = newY;
-                enemy.enemyHealth = 200;
+                enemy.enemyHealth = 250; // Buff: Executioner regens to 250 HP in phase 2
                 enemy.enemySpeed = 0.6; // Correct phase 2 speed
                 // Remove phase2 indicator if it exists
                 if (enemy.phase2Text && enemy.phase2Text.destroy) { enemy.phase2Text.destroy(); enemy.phase2Text = null; }
@@ -1162,7 +1162,7 @@ for (let i = bullets.length - 1; i >= 0; i--) {
             bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
             enemies.getChildren().forEach(enemy => {
                 if (!enemy.active) return;
-                let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.target.y) ** 2);
                 if (dist < bullet.aoe) {
                     enemy.enemyHealth -= bullet.damage;
                 }
