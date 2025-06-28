@@ -17,42 +17,42 @@ const TOWER_ASSETS = [
     "Minigunner.png",
     "Scout.png",
     "Shotgun.png",
-    "rocketeer.png" // New tower asset
+    "rocket.png" // Rocketeer tower
 ];
 
 // Assign stats for each enemy asset
 const ENEMY_STATS = {
-    "CitizenPlush.png":    { speed: 1.0, health: 4 },
-    "CobaltGuardLunar.png":{ speed: 0.8, health: 50 },
-    "ExecutionerPlush.png":{ speed: 0.3, health: 360 },
-    "GhostLunar.png":      { speed: 1.2, health: 5 },
+    "CitizenPlush.png":    { speed: 1.0, health: 5 },
+    "CobaltGuardLunar.png":{ speed: 0.8, health: 70 },
+    "ExecutionerPlush.png":{ speed: 0.3, health: 400 },
+    "GhostLunar.png":      { speed: 1.2, health: 8 },
     "KnightLunar.png":     { speed: 2, health: 10 },
-    "LO_Marionette.png":   { speed: 1.3, health: 20},
-    "ReaperAct2_refreshed.png": { speed: 0.6, health: 60 },
-    "SinRealtdsnobackground.png": { speed: 1.5, health: 2 },
-    "demon.png":           { speed: 0.5, health: 75 } // Demon stats
+    "LO_Marionette.png":   { speed: 1.3, health: 25},
+    "ReaperAct2_refreshed.png": { speed: 0.6, health: 69 },
+    "SinRealtdsnobackground.png": { speed: 1.5, health: 4 },
+    "demon.png":           { speed: 0.5, health: 100 } // Demon stats
 };
 
 // Cash rewards per enemy type
 const ENEMY_CASH = {
-    "CitizenPlush.png": 15,
-    "CobaltGuardLunar.png": 60,
-    "ExecutionerPlush.png": -1080,
-    "GhostLunar.png": 25,
-    "KnightLunar.png": 40,
-    "LO_Marionette.png": 50,
-    "ReaperAct2_refreshed.png": 90,
-    "SinRealtdsnobackground.png": -1,
-    "demon.png": -2 // Demon cash
+    "CitizenPlush.png": 13,
+    "CobaltGuardLunar.png": 55,
+    "ExecutionerPlush.png": -1620,
+    "GhostLunar.png": 23,
+    "KnightLunar.png": 30,
+    "LO_Marionette.png": 40,
+    "ReaperAct2_refreshed.png": 85,
+    "SinRealtdsnobackground.png": -2,
+    "demon.png": -4 // Demon cash
 };
 
 // Tower stats
 const TOWER_STATS = {
-    "Commander.png":   { range: 150, damage: 4, firerate: 15, cost: 110, isCommander: true },
+    "Commander.png":   { range: 150, damage: 4, firerate: 12, cost: 110, isCommander: true },
     "Minigunner.png":  { range: 120, damage: 2, firerate: 0.5, cost: 130 },
     "Scout.png":       { range: 80,  damage: 5, firerate: 9, cost: 25 },
-    "Shotgun.png":     { range: 60,  damage: 3, firerate: 6, cost:  45},
-    "rocketeer.png":   { range: 180, damage:10, firerate: 45, cost: 120, aoe: 20, missiles: 4 } // New tower stats
+    "Shotgun.png":     { range: 60,  damage: 4.5, firerate: 6, cost:  35},
+    "rocket.png":      { range: 150, damage: 20, firerate: 100, cost: 120, aoe: 100, missiles: 4 } // Rocketeer
 };
 
 // --- HP MODIFIER CONFIG ---
@@ -548,24 +548,67 @@ function update(time, delta) {
         }
     });
     // --- Tower Firing Logic ---
-    let bulletsSpawnedThisFrame = 0;
-    const BULLET_SPAWN_LIMIT_PER_FRAME = 1000;
     towers.getChildren().forEach(tower => {
-        if (!tower.active) return; // Skip destroyed towers
-        if (tower.stunned) return; // Stunned towers can't attack
+        if (!tower.active) return;
+        if (tower.stunned) return;
         let firerateBuff = 1;
         if (!tower.isCommander) {
-            // Commander buff: halve interval between shots (2x firerate), not stackable
             let inRangeOfCommander = towers.getChildren().some(other => other.isCommander && Math.sqrt((tower.x - other.x) ** 2 + (tower.y - other.y) ** 2) < other.range);
-            if (inRangeOfCommander) firerateBuff *= 0.5; // 2x faster
+            if (inRangeOfCommander) firerateBuff *= 0.5;
         }
         if (!tower.lastShot) tower.lastShot = 0;
         tower.lastShot += delta || 16;
+        // Rocketeer burst fire logic
+        if (tower.towerType === "rocket.png") {
+            if (tower.burstReloading) {
+                tower.burstInterval += delta || 16;
+                if (tower.burstInterval >= 1200) { // 20s at 60fps
+                    tower.burstMissilesLeft = 4;
+                    tower.burstReloading = false;
+                    tower.burstInterval = 0;
+                }
+                return;
+            }
+            if (!tower.burstMissilesLeft || tower.burstMissilesLeft <= 0) {
+                tower.burstReloading = true;
+                tower.burstInterval = 0;
+                return;
+            }
+            if (!tower.burstInterval) tower.burstInterval = 0;
+            tower.burstInterval -= delta || 16;
+            if (tower.burstInterval <= 0) {
+                let enemiesInRange = enemies.getChildren().filter(e => {
+                    if (!e.active) return false;
+                    let d = Math.sqrt((tower.x - e.x) ** 2 + (tower.y - e.y) ** 2);
+                    return d < tower.range;
+                });
+                Phaser.Utils.Array.Shuffle(enemiesInRange);
+                let missileTarget = enemiesInRange[0];
+                if (missileTarget) {
+                    let angle = Math.atan2(missileTarget.y - tower.y, missileTarget.x - tower.x);
+                    let speed = 7;
+                    let vx = Math.cos(angle) * speed;
+                    let vy = Math.sin(angle) * speed;
+                    bullets.push({
+                        x: tower.x,
+                        y: tower.y,
+                        vx,
+                        vy,
+                        lifetime: 90,
+                        damage: tower.damage,
+                        aoe: TOWER_STATS["rocket.png"].aoe,
+                        missile: true,
+                        target: missileTarget
+                    });
+                    tower.burstMissilesLeft--;
+                    tower.burstInterval = 40; // 0.67s between missiles for 4 in 2s
+                }
+            }
+            return;
+        }
         let effectiveFirerate = (tower.firerate * firerateBuff) * 60;
-        effectiveFirerate = Math.max(effectiveFirerate, 120); // Clamp: minimum 120ms between shots
-        // All towers (including Minigunner) use bullet logic
-        if (tower.lastShot >= effectiveFirerate && bulletsSpawnedThisFrame < BULLET_SPAWN_LIMIT_PER_FRAME) {
-            // Find nearest enemy in range
+        effectiveFirerate = Math.max(effectiveFirerate, 120);
+        if (tower.lastShot >= effectiveFirerate) {
             let target = null;
             let minDist = Infinity;
             enemies.getChildren().forEach(enemy => {
@@ -579,7 +622,6 @@ function update(time, delta) {
                 let before = bullets.length;
                 fireBullet.call(this, tower, target);
                 let after = bullets.length;
-                bulletsSpawnedThisFrame += (after - before);
                 tower.lastShot = 0;
             }
         }
@@ -591,25 +633,13 @@ function update(time, delta) {
         bullet.x += bullet.vx;
         bullet.y += bullet.vy;
         bullet.lifetime--;
-        if (bullet.missile) {
+        if (bullet.missile && bullet.aoe) {
             bulletGraphics.fillStyle(0xff8800, 1);
             bulletGraphics.fillCircle(bullet.x, bullet.y, 6);
-        } else {
-            bulletGraphics.fillStyle(0xffff00, 1);
-            bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
-        }
-        if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
-            bullets.splice(i, 1);
-            continue;
-        }
-        if (bullet.missile && bullet.aoe) {
-            // Missile: explode on proximity to target
             let d = Math.sqrt((bullet.x - bullet.target.x) ** 2 + (bullet.y - bullet.target.y) ** 2);
             if (d < 12) {
-                // Draw explosion
                 bulletGraphics.fillStyle(0xff2200, 0.5);
                 bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
-                // Damage all enemies in radius
                 enemies.getChildren().forEach(enemy => {
                     if (!enemy.active) return;
                     let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
@@ -621,6 +651,8 @@ function update(time, delta) {
                 continue;
             }
         } else {
+            bulletGraphics.fillStyle(0xffff00, 1);
+            bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
             enemies.getChildren().forEach(enemy => {
                 if (!enemy.active) return;
                 let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
@@ -630,6 +662,15 @@ function update(time, delta) {
                     bullet.piercedEnemies.add(enemy);
                     enemy.enemyHealth -= bullet.damage;
                     if (!bullet.piercing) bullets.splice(i, 1);
+                    if (enemy.enemyHealth <= 0) {
+                        let cash = ENEMY_CASH[enemy.texture.key] || 0;
+                        if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
+                            window.wave5DeathCounter++;
+                        }
+                        enemy.destroy();
+                        playerMoney += cash;
+                        sidebarNeedsUpdate = true;
+                    }
                 }
             });
         }
@@ -1015,47 +1056,82 @@ function placeTower(x, y, asset) {
 }
 
 function fireBullet(tower, target) {
-    if (tower.texture && tower.texture.key === "rocketeer.png") {
-        // Fire 4 missiles at up to 4 different enemies in range
-        let enemiesInRange = enemies.getChildren().filter(e => {
-            if (!e.active) return false;
-            let d = Math.sqrt((tower.x - e.x) ** 2 + (tower.y - e.y) ** 2);
-            return d < tower.range;
-        });
-        Phaser.Utils.Array.Shuffle(enemiesInRange);
-        let targets = enemiesInRange.slice(0, 4);
-        targets.forEach(missileTarget => {
-            let angle = Math.atan2(missileTarget.y - tower.y, missileTarget.x - tower.x);
-            let speed = 7;
-            let vx = Math.cos(angle) * speed;
-            let vy = Math.sin(angle) * speed;
-            bullets.push({
-                x: tower.x,
-                y: tower.y,
-                vx,
-                vy,
-                lifetime: 90,
-                damage: tower.damage,
-                aoe: TOWER_STATS["rocketeer.png"].aoe,
-                missile: true,
-                target: missileTarget
-            });
-        });
+    // Rocketeer burst logic
+    if (tower.towerType === "rocket.png") {
+        if (!tower.burstMissilesLeft || tower.burstMissilesLeft <= 0) {
+            tower.burstMissilesLeft = 4;
+            tower.burstReloading = false;
+            tower.burstInterval = 0;
+        }
+        if (!tower.burstReloading) {
+            if (!tower.burstInterval || tower.burstInterval <= 0) {
+                // Find a target for this missile
+                let enemiesInRange = enemies.getChildren().filter(e => {
+                    if (!e.active) return false;
+                    let d = Math.sqrt((tower.x - e.x) ** 2 + (tower.y - e.y) ** 2);
+                    return d < tower.range;
+                });
+                Phaser.Utils.Array.Shuffle(enemiesInRange);
+                let missileTarget = enemiesInRange[0];
+                if (missileTarget) {
+                    let angle = Math.atan2(missileTarget.y - tower.y, missileTarget.x - tower.x);
+                    let speed = 7;
+                    let vx = Math.cos(angle) * speed;
+                    let vy = Math.sin(angle) * speed;
+                    bullets.push({
+                        x: tower.x,
+                        y: tower.y,
+                        vx,
+                        vy,
+                        lifetime: 90,
+                        damage: tower.damage,
+                        aoe: TOWER_STATS["rocket.png"].aoe,
+                        missile: true,
+                        target: missileTarget
+                    });
+                    tower.burstMissilesLeft--;
+                    tower.burstInterval = 150; // 2.5s at 60fps
+                }
+            }
+            if (tower.burstMissilesLeft > 0) {
+                tower.lastShot = 0; // Don't reset firerate until burst is done
+            } else {
+                tower.burstReloading = true;
+                tower.burstInterval = 0;
+                tower.lastShot = 0; // Now start reload
+            }
+        }
         return;
     }
-    // Default: single bullet
     let angle = Math.atan2(target.y - tower.y, target.x - tower.x);
-    let speed = 10;
-    let vx = Math.cos(angle) * speed;
-    let vy = Math.sin(angle) * speed;
-    bullets.push({
-        x: tower.x,
-        y: tower.y,
-        vx,
-        vy,
-        lifetime: 60,
-        damage: tower.damage
-    });
+    let speed = 6;
+    if (tower.towerType === "Shotgun.png") {
+        // Shotgun: 3 piercing bullets in a spread
+        for (let i = -1; i <= 1; i++) {
+            let spread = angle + i * 0.18; // ~10 degrees
+            let bullet = {
+                x: tower.x,
+                y: tower.y,
+                vx: Math.cos(spread) * speed,
+                vy: Math.sin(spread) * speed,
+                lifetime: 20,
+                damage: tower.damage,
+                piercing: true,
+                piercedEnemies: new Set()
+            };
+            bullets.push(bullet);
+        }
+    } else {
+        let bullet = {
+            x: tower.x,
+            y: tower.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            lifetime: 60,
+            damage: tower.damage
+        };
+        bullets.push(bullet);
+    }
 }
 
 function renderBullets(graphics) {
@@ -1077,25 +1153,13 @@ for (let i = bullets.length - 1; i >= 0; i--) {
     bullet.x += bullet.vx;
     bullet.y += bullet.vy;
     bullet.lifetime--;
-    if (bullet.missile) {
+    if (bullet.missile && bullet.aoe) {
         bulletGraphics.fillStyle(0xff8800, 1);
         bulletGraphics.fillCircle(bullet.x, bullet.y, 6);
-    } else {
-        bulletGraphics.fillStyle(0xffff00, 1);
-        bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
-    }
-    if (bullet.lifetime <= 0 || bullet.x < 0 || bullet.x > WIDTH || bullet.y < 0 || bullet.y > HEIGHT) {
-        bullets.splice(i, 1);
-        continue;
-    }
-    if (bullet.missile && bullet.aoe) {
-        // Missile: explode on proximity to target
         let d = Math.sqrt((bullet.x - bullet.target.x) ** 2 + (bullet.y - bullet.target.y) ** 2);
         if (d < 12) {
-            // Draw explosion
             bulletGraphics.fillStyle(0xff2200, 0.5);
             bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
-            // Damage all enemies in radius
             enemies.getChildren().forEach(enemy => {
                 if (!enemy.active) return;
                 let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
@@ -1107,6 +1171,8 @@ for (let i = bullets.length - 1; i >= 0; i--) {
             continue;
         }
     } else {
+        bulletGraphics.fillStyle(0xffff00, 1);
+        bulletGraphics.fillCircle(bullet.x, bullet.y, 4);
         enemies.getChildren().forEach(enemy => {
             if (!enemy.active) return;
             let d = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
@@ -1116,6 +1182,15 @@ for (let i = bullets.length - 1; i >= 0; i--) {
                 bullet.piercedEnemies.add(enemy);
                 enemy.enemyHealth -= bullet.damage;
                 if (!bullet.piercing) bullets.splice(i, 1);
+                if (enemy.enemyHealth <= 0) {
+                    let cash = ENEMY_CASH[enemy.texture.key] || 0;
+                    if (currentWave === 4 && typeof window.wave5DeathCounter === 'number') {
+                        window.wave5DeathCounter++;
+                    }
+                    enemy.destroy();
+                    playerMoney += cash;
+                    sidebarNeedsUpdate = true;
+                }
             }
         });
     }
