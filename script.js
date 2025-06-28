@@ -424,15 +424,15 @@ function update(time, delta) {
             // Pause reaper for 1s and overheal
             reaper.abilityPauseTimer = 1000;
             reaper.canMove = false;
-            reaper.enemyHealth += 10; // Buffed from 5 to 10
-            for (let j = 0; j < 3; j++) {
+            reaper.enemyHealth += 15; // Buffed from 10 to 15
+            for (let j = 0; j < 8; j++) { // 8 sins (was 3)
                 spawnEnemy.call(this, "SinRealtdsnobackground.png");
             }
-            for (let j = 0; j < 5; j++) {
+            for (let j = 0; j < 8; j++) { // 8 ghosts (was 5)
                 spawnEnemy.call(this, "GhostLunar.png");
             }
             window.allowDemonSpawn = true;
-            for (let j = 0; j < 2; j++) {
+            for (let j = 0; j < 3; j++) { // 3 demons (was 2)
                 spawnEnemyAtEdge.call(this, "demon.png");
             }
             window.allowDemonSpawn = false;
@@ -642,7 +642,7 @@ function update(time, delta) {
                 bulletGraphics.fillCircle(bullet.x, bullet.y, bullet.aoe);
                 enemies.getChildren().forEach(enemy => {
                     if (!enemy.active) return;
-                    let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.y) ** 2);
+                    let dist = Math.sqrt((bullet.x - enemy.x) ** 2 + (bullet.y - enemy.target.y) ** 2);
                     if (dist < bullet.aoe) {
                         enemy.enemyHealth -= bullet.damage;
                     }
@@ -724,7 +724,7 @@ function update(time, delta) {
                 if (edge === 3) { newX = 0; newY = Phaser.Math.Between(0, HEIGHT); }
                 enemy.x = newX;
                 enemy.y = newY;
-                enemy.enemyHealth = 250; // Buff: Executioner regens to 250 HP in phase 2
+                enemy.enemyHealth = 275; // Buff: Executioner regens to 275 HP in phase 2
                 enemy.enemySpeed = 0.6; // Correct phase 2 speed
                 // Remove phase2 indicator if it exists
                 if (enemy.phase2Text && enemy.phase2Text.destroy) { enemy.phase2Text.destroy(); enemy.phase2Text = null; }
